@@ -2,9 +2,11 @@ group 'eu.metatools.kontor'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.2.20'
+    ext.kotlin_version = '1.2.21'
     ext.coroutines_version = '0.22'
     ext.serialization_version = '0.4'
+    ext.ktx_version = '1.9.7-b1'
+    ext.gdx_version = '1.9.7'
 
     repositories {
         mavenCentral()
@@ -30,7 +32,7 @@ repositories {
 }
 
 dependencies {
-    compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 
     compile "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
@@ -40,10 +42,22 @@ dependencies {
     compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$serialization_version"
 
     compile "io.netty:netty-all:4.1.10.Final"
-    compile 'org.jgroups:jgroups:4.0.3.Final'
+    compile 'org.jgroups:jgroups:4.0.9.Final'
 
     compile "com.google.guava:guava:22.0"
     compile "com.googlecode.lanterna:lanterna:3.0.0-rc1"
+
+    // WeGe dependencies
+    compile "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdx_version"
+    compile "com.badlogicgames.gdx:gdx-platform:$gdx_version:natives-desktop"
+    compile "com.badlogicgames.gdx:gdx-freetype-platform:$gdx_version:natives-desktop"
+
+    compile "io.github.libktx:ktx-actors:$ktx_version"
+    compile "io.github.libktx:ktx-app:$ktx_version"
+    compile "io.github.libktx:ktx-assets:$ktx_version"
+    compile "io.github.libktx:ktx-async:$ktx_version"
+    compile "io.github.libktx:ktx-box2d:$ktx_version"
+    compile "io.github.libktx:ktx-scene2d:$ktx_version"
 }
 
 

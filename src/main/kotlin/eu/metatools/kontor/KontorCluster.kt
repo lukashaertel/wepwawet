@@ -19,6 +19,9 @@ import java.nio.charset.Charset
 import kotlin.reflect.KClass
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
+import org.jgroups.conf.ProtocolConfiguration
+import org.jgroups.protocols.SHARED_LOOPBACK
+import org.jgroups.protocols.UDP
 
 /**
  * Provides network interaction as a cluster node. [inbound] will receive all incoming messages, [outbound] will take
@@ -51,7 +54,7 @@ class KontorCluster(
         /**
          * The default configurator used for the [configurator] property.
          */
-        val DEFAULT_CONFIGURATOR = ConfiguratorFactory.getStackConfigurator(Global.DEFAULT_PROTOCOL_STACK)
+        val DEFAULT_CONFIGURATOR = ConfiguratorFactory.getStackConfigurator("local.xml")
     }
 
     /**

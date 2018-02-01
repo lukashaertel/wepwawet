@@ -1,11 +1,11 @@
 package eu.metatools.common
 
-import kotlinx.coroutines.experimental.CommonPool
-import kotlinx.coroutines.experimental.Job
+import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.consumeEach
-import kotlinx.coroutines.experimental.launch
+import java.lang.Math.random
+import java.util.*
 import kotlin.coroutines.experimental.CoroutineContext
 
 
@@ -113,3 +113,46 @@ inline fun <T, reified U : T> Pair<Job, ReceiveChannel<T>>.pick(
 @Deprecated("Old coroutine method")
 inline infix fun <T, reified U : T> Pair<Job, ReceiveChannel<T>>.pick(noinline block: suspend (U) -> Unit) =
         second.pick(block)
+
+/**
+ * Reduces the deferred parts using a reducer.
+ */
+fun <T> asyncReduce(first: Deferred<T>, second: Deferred<T>, reducer: suspend (T, T) -> T) =
+        async {
+            // Apply reducer on the results of both deferred values.
+            reducer(first.await(), second.await())
+        }
+
+/**
+ * Reduce list of deferred parts using a reducer.
+ */
+fun <T> asyncReduce(list: List<Deferred<T>>, reducer: suspend (T, T) -> T): Deferred<T> {
+    // If list is empty, return null.
+    if (list.isEmpty())
+        error("Reducing empty list")
+
+    // If one element, return it.
+    if (list.size == 1)
+        return list[0]
+
+    // If two elements, return primitive async reduce.
+    if (list.size == 2)
+        return asyncReduce(list[0], list[1], reducer)
+
+    if (list.size % 2 == 0) {
+        // List can be decomposed pairwise, reduce all items pairwise.
+        return asyncReduce(list.pairs().map { (a, b) -> asyncReduce(a, b, reducer) }, reducer)
+    } else {
+        // List has non-pair element, decomposed into pairwise part and extraneous element.
+        val init = list.subList(0, list.size - 1)
+        val last = list[list.size - 1]
+
+        // Reduce pairwise part and combine with extraneous element.
+        return asyncReduce(asyncReduce(init, reducer), last, reducer)
+    }
+}
+
+suspend fun <T> Iterable<Deferred<T>>.awaitAll() {
+    for (d in this)
+        d.await()
+}
