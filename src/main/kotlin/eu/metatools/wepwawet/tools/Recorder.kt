@@ -1,6 +1,6 @@
 package eu.metatools.wepwawet.tools
 
-import eu.metatools.common.LinearInterpolator
+import eu.metatools.serialization.LinearInterpolator
 import eu.metatools.wepwawet.Container
 import eu.metatools.wepwawet.Entity
 import java.util.*

@@ -1,5 +1,6 @@
-package eu.metatools.common
+package eu.metatools.serialization
 
+import eu.metatools.common.primitiveSerialContext
 import java.math.BigDecimal
 import java.util.*
 import kotlinx.serialization.*
