@@ -1,50 +1,73 @@
 package eu.metatools.wege
 
-import com.badlogic.gdx.Screen
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration
+import com.badlogic.gdx.maps.tiled.TmxMapLoader
 import com.badlogic.gdx.utils.viewport.ScreenViewport
-import ktx.app.*
+import eu.metatools.wege.data.*
+import eu.metatools.wege.screens.Loading
+import eu.metatools.wege.screens.Menu
+import eu.metatools.wege.tools.ExGame
+import eu.metatools.wege.tools.localFile
+import kotlinx.serialization.json.JSON
+import kotlinx.serialization.serializer
 import ktx.async.assets.AssetStorage
 import ktx.async.enableKtxCoroutines
 import ktx.async.ktxAsync
-import ktx.scene2d.*
+import ktx.scene2d.Scene2DSkin
+import java.util.*
 import kotlin.properties.Delegates
 
-import com.badlogic.gdx.maps.tiled.*
-import eu.metatools.wege.screens.*
-
 /** ApplicationListener implementation. */
-class WeltraumGefecht : KtxGame<Screen>() {
+class WeltraumGefecht : ExGame<WeltraumGefecht>() {
     val viewport = ScreenViewport().apply {
         unitsPerPixel = 1f / 2f
     }
 
     var storage by Delegates.notNull<AssetStorage>()
 
+    var identity by localFile("uuid", UUID::randomUUID) {
+        read {
+            UUID.fromString(readString("utf-8"))
+        }
+        write {
+            writeString(it.toString(), false, "utf-8")
+        }
+    }
+
+
+    var settings by localFile("settings.json", { Settings.default }) {
+        read {
+            JSON.parse(readString("utf-8"))
+        }
+        write {
+            writeString(JSON.stringify(it), false, "utf-8")
+        }
+    }
+
+    val loading by lazy { Loading(this) }
+
+    val menu by lazy { Menu(this) }
+
     override fun create() {
+        super.create()
         enableKtxCoroutines(asynchronousExecutorConcurrencyLevel = 1)
         storage = AssetStorage()
         storage.setLoader(TmxMapLoader(), "tmx")
 
         ktxAsync {
             // Indicate loading, no resources explicitly needed
-            addScreen(Loading(this@WeltraumGefecht))
-            setScreen<Loading>()
+            pushScreen(loading)
 
             // Load main resource
             Scene2DSkin.defaultSkin = storage.load("ui/skin/uiskin.json")
 
-            // Add screens depending on main resource
-            addScreen(Browse(this@WeltraumGefecht))
-            addScreen(Create(this@WeltraumGefecht))
-            addScreen(Menu(this@WeltraumGefecht))
-            addScreen(Voronois(this@WeltraumGefecht))
+            // Go to main menu
+            replaceScreen(menu)
 
-            // Go to menu screen
-            setScreen<Menu>()
         }
     }
+
 
     override fun resize(width: Int, height: Int) {
         super.resize(width, height)
@@ -52,6 +75,7 @@ class WeltraumGefecht : KtxGame<Screen>() {
     }
 
     override fun dispose() {
+        super.dispose()
         storage.dispose()
     }
 }

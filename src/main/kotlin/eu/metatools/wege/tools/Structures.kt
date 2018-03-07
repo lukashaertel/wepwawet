@@ -7,12 +7,18 @@ import java.util.*
  */
 typealias XY = Pair<Int, Int>
 
+/**
+ * Returns the Euclidean length between two points.
+ */
 infix fun XY.eucLen(other: XY): Double {
     val a = (other.first - first).toDouble()
     val b = (other.second - second).toDouble()
     return Math.sqrt(a * a + b * b)
 }
 
+/**
+ * RetruReturnsns the Manhattan length between two points.
+ */
 infix fun XY.manLen(other: XY): Int {
     val a = Math.abs(other.first - first)
     val b = Math.abs(other.second - second)

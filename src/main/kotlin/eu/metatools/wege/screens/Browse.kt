@@ -1,60 +1,54 @@
 package eu.metatools.wege.screens
 
 import com.badlogic.gdx.scenes.scene2d.Stage
-import eu.metatools.wege.tools.StageScreen
+import com.badlogic.gdx.scenes.scene2d.ui.Label
 import eu.metatools.wege.WeltraumGefecht
+import eu.metatools.wege.tools.StageScreen
+import eu.metatools.wege.tools.dropLeft
 import eu.metatools.wege.tools.dropRight
+import eu.metatools.wege.tools.popScreen
 import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.scene2d.*
 
-class Browse(val game: WeltraumGefecht) : StageScreen() {
+
+class Browse(game: WeltraumGefecht) : StageScreen<WeltraumGefecht>(game) {
+
+    lateinit var games: KVerticalGroup
+    lateinit var players: KVerticalGroup
+    lateinit var status: Label
+
     override val stage = Stage(game.viewport).apply {
         this + container {
+            pad(50f)
             setFillParent(true)
-            actor = verticalGroup {
-                horizontalGroup {
-                    space(40f)
-                    label("Name") { width = 300f }
-                    label("Players") { width = 100f }
-                    label("Join") { width = 100f }
-                }
-
-                horizontalGroup {
-                    space(40f)
-                    label("Stupid game") { width = 300f }
-                    label("0/10") { width = 100f }
-                    button {
-                        width = 100f
-                        label("Join")
-                    }
-                }
-
-                horizontalGroup {
-                    space(40f)
-                    label("Stupid game") { width = 300f }
-                    label("0/10") { width = 100f }
-                    button {
-                        width = 100f
-                        label("Join")
-                    }
-                }
-                horizontalGroup {
-                    space(40f)
-                    label("Stupid game") { width = 300f }
-                    label("0/10") { width = 100f }
-                    button {
-                        width = 100f
-                        label("Join")
-                    }
+            actor = table {
+                label("Games")
+                label("Players")
+                row()
+                games = verticalGroup()
+                players = verticalGroup()
+            }
+        }
+        this + dropLeft {
+            button {
+                label("Create")
+                onClick {
                 }
             }
+            status = label("Status")
         }
         this + dropRight {
             button {
                 label("Back")
-                onClick { game.setScreen<Menu>() }
+                onClick {
+                    popScreen()
+                }
             }
         }
+    }
+
+    override fun render(delta: Float) {
+        super.render(delta)
     }
 }

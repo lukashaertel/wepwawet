@@ -39,7 +39,7 @@ typealias Extend = (XY) -> List<XY>
 
 /**
  * Computes a prop field based on initial properties at positions and some distributors. For each point, the extension
- * is computed and analzed based on the given distributor.
+ * is computed and analyzed based on the given distributor.
  * @param inits The initial properties at positions with the associated distributions.
  * @param size The size of the resulting field.
  * @param extend The point extension, does not need to remain in bounds, default is [XY.around].
@@ -80,7 +80,7 @@ inline fun <reified P : Prop> propField(
                         if (e !in target)
                             continue
 
-                        // If assigment is present, skip.
+                        // If assignment is present, skip.
                         if (target[e] != null)
                             continue
 

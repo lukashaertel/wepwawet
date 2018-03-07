@@ -6,10 +6,11 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.utils.Align
 import eu.metatools.wege.WeltraumGefecht
+import eu.metatools.wege.tools.ExScreen
 import ktx.app.KtxScreen
 import ktx.app.use
 
-class Loading(val game: WeltraumGefecht) : KtxScreen {
+class Loading(game: WeltraumGefecht) : ExScreen<WeltraumGefecht>(game) {
     val font = BitmapFont()
     val batch = SpriteBatch().apply {
         color = Color.WHITE

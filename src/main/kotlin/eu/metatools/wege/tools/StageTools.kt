@@ -9,6 +9,31 @@ import ktx.scene2d.KHorizontalGroup
 import ktx.scene2d.horizontalGroup
 
 /**
+ * Adds a horizontal group aligned left top.
+ */
+inline fun topLeft(init: KHorizontalGroup.() -> Unit) = horizontalGroup {
+    pad(10f)
+    space(10f)
+    left()
+    top()
+    setFillParent(true)
+    init()
+}
+
+/**
+ * Adds a horizontal group aligned right top.
+ */
+inline fun topRight(init: KHorizontalGroup.() -> Unit) = horizontalGroup {
+    pad(10f)
+    space(10f)
+    right()
+    top()
+    setFillParent(true)
+    init()
+}
+
+
+/**
  * Adds a horizontal group aligned left bottom.
  */
 inline fun dropLeft(init: KHorizontalGroup.() -> Unit) = horizontalGroup {
@@ -32,10 +57,13 @@ inline fun dropRight(init: KHorizontalGroup.() -> Unit) = horizontalGroup {
     init()
 }
 
+// TODO: Replace KTX screens with actual screens, not being able to pass parameters is sucky. Also there is a need for
+// stacks of screens
+
 /**
  * Stage-based screen, can set [processor] to handle inputs.
  */
-abstract class StageScreen : KtxScreen {
+abstract class StageScreen<G : ExGame<G>>(game: G) : ExScreen<G>(game) {
     /**
      * The stage this screen displays.
      */
@@ -46,7 +74,7 @@ abstract class StageScreen : KtxScreen {
      */
     open val processor: InputProcessor? = null
 
-    override fun show() {
+    override fun enter() {
         if (processor != null)
             Gdx.input.inputProcessor = InputMultiplexer(stage, processor)
         else

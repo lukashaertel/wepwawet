@@ -6,34 +6,35 @@ import eu.metatools.wege.tools.StageScreen
 import eu.metatools.wege.WeltraumGefecht
 import eu.metatools.wege.tools.dropLeft
 import eu.metatools.wege.tools.dropRight
+import eu.metatools.wege.tools.pushScreen
 import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.scene2d.button
 import ktx.scene2d.image
 import ktx.scene2d.label
 
-class Menu(val game: WeltraumGefecht) : StageScreen() {
+class Menu(game: WeltraumGefecht) : StageScreen<WeltraumGefecht>(game) {
+    val browse by lazy { Browse(game) }
+
+    val options by lazy { Options(game) }
+
+    val playground by lazy { Voronois(game) }
+
     override val stage = Stage(game.viewport).apply {
         this + dropLeft {
             button {
                 label("Voronois")
-                onClick { game.setScreen<Voronois>() }
+                onClick {
+                    pushScreen(playground)
+                }
             }
             button {
-                label("Create game")
-                onClick { }
-            }
-            button {
-                label("Enter game")
-                onClick { game.setScreen<Browse>() }
-            }
-            button {
-                label("Ship editor")
-                onClick { }
+                label("Games")
+                onClick { pushScreen(browse) }
             }
             button {
                 label("Options")
-                onClick { }
+                onClick { pushScreen(options) }
             }
         }
 
