@@ -63,3 +63,14 @@ fun Float.round(digits: Int = 0) = when (digits) {
     2 -> Math.round(this * 100.0f) / 100.0f
     else -> powTen(digits).toFloat().let { Math.round(this * it) / it }
 }
+
+inline fun <reified T> Any?.asSafe() =
+        @Suppress("unchecked_cast")
+        this as T
+
+/**
+ * Generates a list of values from the receiver that is doubled until max is reached.
+ */
+infix fun Int.doublesTo(max: Int) = generateSequence(this) {
+    if (it * 2 >= max) it * 2 else null
+}.toList()

@@ -1,10 +1,13 @@
 package eu.metatools.common
 
+import eu.metatools.net.BrowseResult
 import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
+import kotlinx.coroutines.experimental.channels.SendChannel
 import kotlinx.coroutines.experimental.channels.consumeEach
 import java.lang.Math.random
+import java.net.InetAddress
 import java.util.*
 import kotlin.coroutines.experimental.CoroutineContext
 
@@ -155,4 +158,36 @@ fun <T> asyncReduce(list: List<Deferred<T>>, reducer: suspend (T, T) -> T): Defe
 suspend fun <T> Iterable<Deferred<T>>.awaitAll() {
     for (d in this)
         d.await()
+}
+
+
+/**
+ * Awaits the first item, then closes the channel.
+ */
+suspend fun <E> ReceiveChannel<E>.firstOnly(cause: Throwable? = null): E {
+    val r = receive()
+    cancel(cause)
+    return r
+}
+
+/**
+ * A receive channel with associated data.
+ * @property get The getter for the data.
+ * @property on The actual implementation of the receive channel.
+ */
+class ReceiveChannelWith<out E, out T>(
+        val get: () -> E,
+        val on: ReceiveChannel<T>) : ReceiveChannel<T> by on {
+    val data: E get() = get()
+}
+
+/**
+ * A send channel with associated data.
+ * @property get The getter for the data.
+ * @property on The actual implementation of the send channel.
+ */
+class SendChannelWith<out E, in T>(
+        val get: () -> E,
+        val on: SendChannel<T>) : SendChannel<T> by on {
+    val data: E get() = get()
 }

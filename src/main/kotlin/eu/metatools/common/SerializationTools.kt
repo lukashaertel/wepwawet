@@ -1,7 +1,9 @@
 package eu.metatools.common
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialContext
 import kotlinx.serialization.internal.*
+import kotlinx.serialization.serializer
 
 val primitiveSerialContext = SerialContext().apply {
     registerSerializer(Long::class, LongSerializer)
@@ -14,3 +16,6 @@ val primitiveSerialContext = SerialContext().apply {
     registerSerializer(Float::class, FloatSerializer)
     registerSerializer(Int::class, IntSerializer)
 }
+
+fun Any.objectSerializer() =
+        this::class.serializer().asSafe<KSerializer<Any>>()
