@@ -74,3 +74,29 @@ inline fun <reified T> Any?.asSafe() =
 infix fun Int.doublesTo(max: Int) = generateSequence(this) {
     if (it * 2 >= max) it * 2 else null
 }.toList()
+
+/**
+ * Changes the value in a map if present.
+ */
+inline fun <K, V> Map<K, V>.change(key: K, block: (V) -> V): Map<K, V> {
+    if (key !in this)
+        return this
+
+    val value = getValue(key)
+    return this - key + (key to block(value))
+}
+
+fun <E> Iterable<E>.except(element: E) =
+        filter { it != element }
+
+fun <E> Sequence<E>.except(element: E) =
+        filter { it != element }
+
+fun <E> List<E>.except(element: E) =
+        filter { it != element }
+
+fun <K, V> Map<K, V>.except(key: K) =
+        filterKeys { it != key }
+
+infix fun <T> T.iff(condition: Boolean): T? = if (condition) this else null
+inline infix fun <T> T.iff(condition: () -> Boolean): T? = if (condition()) this else null

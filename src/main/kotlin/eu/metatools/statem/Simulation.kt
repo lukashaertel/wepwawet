@@ -3,9 +3,15 @@ package eu.metatools.statem
 
 /**
  * A state machine simulation taking inputs of type [I].
+ * @param S The status type.
  * @param I The input type.
  */
-interface Simulation<in I> {
+interface Simulation<S, in I> {
+    /**
+     * The current user status.
+     */
+    var status: S
+
     /**
      * The current state.
      */
@@ -26,7 +32,7 @@ interface Simulation<in I> {
 /**
  * Sends all the inputs.
  */
-fun <I> Simulation<I>.send(inputs: Iterable<I>) {
+fun <S, I> Simulation<S, I>.send(inputs: Iterable<I>) {
     for (i in inputs)
         send(i)
 }
@@ -34,7 +40,7 @@ fun <I> Simulation<I>.send(inputs: Iterable<I>) {
 /**
  * Sends all the inputs.
  */
-fun <I> Simulation<I>.send(inputs: Sequence<I>) {
+fun <S, I> Simulation<S, I>.send(inputs: Sequence<I>) {
     for (i in inputs)
         send(i)
 }
@@ -42,7 +48,7 @@ fun <I> Simulation<I>.send(inputs: Sequence<I>) {
 /**
  * Sends all the inputs.
  */
-fun <I> Simulation<I>.send(vararg inputs: I) {
+fun <S, I> Simulation<S, I>.send(vararg inputs: I) {
     for (i in inputs)
         send(i)
 }

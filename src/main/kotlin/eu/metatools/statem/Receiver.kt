@@ -7,23 +7,29 @@ import kotlin.reflect.full.cast
 
 /**
  * Receiver for state machine events.
+ * @param S The status type.
  * @param E The type of the events.
  */
-interface Receiver<in E> {
+interface Receiver<in S, in E> {
+    /**
+     * Called when the status is changed.
+     */
+    fun changed(from: S, to: S) {}
+
     /**
      * Called when a state is being left.
      */
-    fun leaving(state: String) {}
+    fun leaving(status: S, state: String) {}
 
     /**
      * Called when a state is entering.
      */
-    fun entering(state: String) {}
+    fun entering(status: S, state: String) {}
 
     /**
      * Called when an event is emitted.
      */
-    fun emit(event: E) {}
+    fun emit(status: S, event: E) {}
 }
 
 /**
@@ -33,27 +39,32 @@ interface Receiver<in E> {
  * @param other The other receiver.
  * @return Returns a new anonymous receiver.
  */
-infix fun <E : F, F> Receiver<E>.and(other: Receiver<F>) = object : Receiver<E> {
-    override fun leaving(state: String) {
-        this@and.leaving(state)
-        other.leaving(state)
+infix fun <S, E : F, F> Receiver<S, E>.and(other: Receiver<S, F>) = object : Receiver<S, E> {
+    override fun changed(from: S, to: S) {
+        this@and.changed(from, to)
+        other.changed(from, to)
     }
 
-    override fun entering(state: String) {
-        this@and.entering(state)
-        other.entering(state)
+    override fun leaving(status: S, state: String) {
+        this@and.leaving(status, state)
+        other.leaving(status, state)
     }
 
-    override fun emit(event: E) {
-        this@and.emit(event)
-        other.emit(event)
+    override fun entering(status: S, state: String) {
+        this@and.entering(status, state)
+        other.entering(status, state)
+    }
+
+    override fun emit(status: S, event: E) {
+        this@and.emit(status, event)
+        other.emit(status, event)
     }
 }
 
 /**
  * Tracks the traversed path.
  */
-class Path<in E> : Receiver<E> {
+class Path<in S, in E> : Receiver<S, E> {
     private val backing = arrayListOf<String>()
 
     /**
@@ -61,7 +72,7 @@ class Path<in E> : Receiver<E> {
      */
     val path get() = backing.toList()
 
-    override fun entering(state: String) {
+    override fun entering(status: S, state: String) {
         backing += state
     }
 }
@@ -69,18 +80,18 @@ class Path<in E> : Receiver<E> {
 /**
  * Throws events that are subtypes of the given exception. The companion object throws all [Throwable]s.
  */
-class Throw(val type: KClass<Throwable> = Throwable::class) : Receiver<Any> {
+class Throw(val type: KClass<Throwable> = Throwable::class) : Receiver<Any, Any> {
     /**
      * The companion object throws all [Throwable]s.
      */
-    companion object : Receiver<Any> {
-        override fun emit(event: Any) {
+    companion object : Receiver<Any, Any> {
+        override fun emit(status: Any, event: Any) {
             if (event is Throwable)
                 throw event
         }
     }
 
-    override fun emit(event: Any) {
+    override fun emit(status: Any, event: Any) {
         if (type.isInstance(event))
             throw type.cast(event)
     }
@@ -89,62 +100,79 @@ class Throw(val type: KClass<Throwable> = Throwable::class) : Receiver<Any> {
 /**
  * Logs all events to the print stream via [println]. The companion object logs to stdout.
  */
-class Log(val to: PrintStream = System.out) : Receiver<Any> {
+class Log(val target: PrintStream = System.out) : Receiver<Any, Any> {
     /**
      * The companion object logs to stdout.
      */
-    companion object : Receiver<Any> {
-        override fun emit(event: Any) {
-            println(event)
+    companion object : Receiver<Any, Any> {
+        override fun changed(from: Any, to: Any) {
+            println("[$from -> $to]")
+        }
+
+        override fun emit(status: Any, event: Any) {
+            println("[$status] $event")
         }
     }
 
-    override fun emit(event: Any) {
-        to.println(event)
+    override fun changed(from: Any, to: Any) {
+        target.println("[$from -> $to]")
+    }
+
+    override fun emit(status: Any, event: Any) {
+        target.println("[$status] $event")
     }
 }
 
 /**
  * Builder methods for [Receiver].
  */
-interface ReceiverBuilder<out E> {
+interface ReceiverBuilder<out S, out E> {
+    /**
+     * Called when user status is changed.
+     */
+    fun changed(handler: (S, S) -> Unit)
 
     /**
      * Called when a state is being left.
      */
-    fun leaving(handler: (String) -> Unit)
+    fun leaving(handler: (S, String) -> Unit)
 
     /**
      * Called when a state is entering.
      */
-    fun entering(handler: (String) -> Unit)
+    fun entering(handler: (S, String) -> Unit)
 
     /**
      * Called when an event is emitted.
      */
-    fun emit(handler: (E) -> Unit)
+    fun emit(handler: (S, E) -> Unit)
 }
 
 /**
  * Builds a receiver.
  */
-inline fun <reified E> receiver(builder: ReceiverBuilder<E>.() -> Unit): Receiver<E> {
+inline fun <reified S, reified E> receiver(builder: ReceiverBuilder<S, E>.() -> Unit): Receiver<S, E> {
     // Stores for the actual methods used.
-    var onLeaving: (String) -> Unit = {}
-    var onEntering: (String) -> Unit = {}
-    var onEmit: (E) -> Unit = {}
+    var onChanged: (S, S) -> Unit = { _, _ -> }
+    var onLeaving: (S, String) -> Unit = { _, _ -> }
+    var onEntering: (S, String) -> Unit = { _, _ -> }
+    var onEmit: (S, E) -> Unit = { _, _ -> }
 
     // Implementation of the builder.
-    val target = object : ReceiverBuilder<E> {
-        override fun leaving(handler: (String) -> Unit) {
+    val target = object : ReceiverBuilder<S, E> {
+        override fun changed(handler: (S, S) -> Unit) {
+            onChanged = handler
+        }
+
+        override fun leaving(handler: (S, String) -> Unit) {
             onLeaving = handler
         }
 
-        override fun entering(handler: (String) -> Unit) {
+        override fun entering(handler: (S, String) -> Unit) {
             onEntering = handler
         }
 
-        override fun emit(handler: (E) -> Unit) {
+        override fun emit(handler: (S, E) -> Unit) {
             onEmit = handler
         }
 
@@ -154,17 +182,21 @@ inline fun <reified E> receiver(builder: ReceiverBuilder<E>.() -> Unit): Receive
     builder(target)
 
     // Return the new interface.
-    return object : Receiver<E> {
-        override fun leaving(state: String) {
-            onLeaving(state)
+    return object : Receiver<S, E> {
+        override fun changed(from: S, to: S) {
+            onChanged(from, to)
         }
 
-        override fun entering(state: String) {
-            onEntering(state)
+        override fun leaving(status: S, state: String) {
+            onLeaving(status, state)
         }
 
-        override fun emit(event: E) {
-            onEmit(event)
+        override fun entering(status: S, state: String) {
+            onEntering(status, state)
+        }
+
+        override fun emit(status: S, event: E) {
+            onEmit(status, event)
         }
     }
 }
