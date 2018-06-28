@@ -122,7 +122,7 @@ class LinearInterpolator(val serialContext: SerialContext? = primitiveSerialCont
         val bkc = put(b)
 
         if (akc != bkc)
-            throw IllegalArgumentException("Mismatching classes for $a and $b")
+            throw IllegalArgumentException("Mismatching bindings for $a and $b")
 
         return get(akc)
     }

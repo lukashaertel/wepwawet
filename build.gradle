@@ -2,14 +2,14 @@ group 'eu.metatools.kontor'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.2.21'
-    ext.coroutines_version = '0.22'
-    ext.serialization_version = '0.4'
+    ext.kotlin_version = '1.2.50'
+    ext.coroutines_version = '0.23.3'
+    ext.serialization_version = '0.5.1'
     ext.ktx_version = '1.9.7-b1'
     ext.gdx_version = '1.9.7'
 
     repositories {
-        mavenCentral()
+        jcenter()
         maven { url "https://kotlin.bintray.com/kotlinx" }
     }
     dependencies {
@@ -26,7 +26,6 @@ mainClassName = "eu.metatools.wepwawet.PlaygroundKt"
 
 
 repositories {
-    mavenCentral()
     jcenter()
     maven { url "https://kotlin.bintray.com/kotlinx" }
 }
@@ -44,7 +43,11 @@ dependencies {
     compile "com.google.guava:guava:22.0"
     compile "com.googlecode.lanterna:lanterna:3.0.0-rc1"
 
-    compile "com.esotericsoftware:kryonet:2.22.0-RC1"
+    // (Optional) dependency for *.net.mina
+    compile "org.apache.mina:mina-core:2.0.19"
+
+    // (Optional) dependency for *.net.jgroups
+    compile "org.jgroups:jgroups:4.0.12.Final"
 
     // WeGe dependencies
     compile "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdx_version"
