@@ -41,6 +41,8 @@ dependencies {
     compile "org.jetbrains.kotlinx:kotlinx-serialization-runtime:$serialization_version"
 
     compile "com.google.guava:guava:22.0"
+
+
     compile "com.googlecode.lanterna:lanterna:3.0.0-rc1"
 
     // (Optional) dependency for *.net.mina

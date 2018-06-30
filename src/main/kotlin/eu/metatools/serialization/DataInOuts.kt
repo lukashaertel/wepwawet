@@ -138,6 +138,6 @@ class DataOutputOutput(val dataOutput: DataOutput, val charset: Charset = Charse
     override fun writeStringValue(value: String) {
         dataOutput.writeInt(value.length)
         val target = encoder.encode(CharBuffer.wrap(value))
-        dataOutput.write(target.array())
+        dataOutput.write(target.array(), 0, target.limit())
     }
 }
