@@ -18,7 +18,10 @@ import eu.metatools.voronois.tools.StageScreen
 import eu.metatools.voronois.tools.dropLeft
 import eu.metatools.voronois.tools.dropRight
 import eu.metatools.voronois.tools.popScreen
-import eu.metatools.wepwawet.*
+import eu.metatools.wepwawet.Container
+import eu.metatools.wepwawet.Entity
+import eu.metatools.wepwawet.Revision
+import eu.metatools.wepwawet.findAuto
 import kotlinx.serialization.Serializable
 import ktx.actors.onClick
 import ktx.actors.plus
@@ -30,6 +33,9 @@ import java.io.*
 import java.util.*
 import kotlin.properties.Delegates.notNull
 
+/**
+ * Transferred call.
+ */
 @Serializable
 data class Call(val time: Int,
                 val inner: Short,
@@ -38,31 +44,80 @@ data class Call(val time: Int,
                 val call: Byte,
                 val arg: Any?)
 
+/**
+ * History of all calls.
+ */
 @Serializable
 data class History(val calls: List<Call>)
 
+/**
+ * Variable storing the history of the game.
+ */
 var history = History(listOf())
 
 fun Container.receive(call: Call) {
     receive(Revision(call.time, call.inner, call.author), call.ids, call.call, call.arg)
 }
 
+/**
+ * Something that's drawable.
+ */
 interface Drawable {
     fun draw(batch: Batch, parentAlpha: Float)
 }
 
+/**
+ * A periodic call, called from the main game loop.
+ */
 interface Periodic {
     fun call()
 }
 
+/**
+ * Called every frame.
+ */
 interface Always : Periodic
 
+/**
+ * Called multiple times per second.
+ */
 interface Frequent : Periodic
 
+/**
+ * Called every second.
+ */
 interface Sometimes : Periodic
 
+/**
+ * Milliseconds of year.
+ */
+fun msoy() = (System.currentTimeMillis() - Date(2018, 1, 1).time).toInt()
 
-class Ex(container: Container) : Entity(container) {
+/**
+ * Get the time of the revision in ms.
+ */
+fun Revision.asMs() = time
+
+
+/**
+ * Integer-position.
+ */
+@Serializable
+data class Pos(val x: Int, val y: Int) {
+    companion object {
+        val left = Pos(-1, 0)
+        val right = Pos(1, 0)
+        val up = Pos(0, 1)
+        val down = Pos(0, -1)
+    }
+
+    operator fun plus(other: Pos) = Pos(x + other.x, y + other.y)
+}
+
+/**
+ * Root object of the game.
+ */
+class Root(container: Container) : Entity(container) {
     var shotPower by prop(0)
 
     val restock by impulse { ->
@@ -77,21 +132,11 @@ class Ex(container: Container) : Entity(container) {
     }
 }
 
-@Serializable
-data class Pos(val x: Int, val y: Int) {
-    companion object {
-        val left = Pos(-1, 0)
-        val right = Pos(1, 0)
-        val up = Pos(0, 1)
-        val down = Pos(0, -1)
-    }
-
-    operator fun plus(other: Pos) = Pos(x + other.x, y + other.y)
-}
-
-
-class Player(container: Container, owner: Byte, start: Pos) : Entity(container, AutoKeyMode.NONE), Drawable, Frequent {
-    val all get() = container.findAKC<Ex>()
+/**
+ * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
+ */
+class Player(container: Container, owner: Byte, start: Pos) : Entity(container), Drawable, Frequent {
+    val all get() = container.findAuto<Root>()
 
     override fun call() {
         all?.let {
@@ -110,28 +155,22 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container, 
 
     var pos by prop(start)
 
-    var dir by prop('r')
-
     var health by prop(100)
 
     val right by impulse { ->
         pos += Pos.right
-        dir = 'r'
     }
 
     val left by impulse { ->
         pos += Pos.left
-        dir = 'l'
     }
 
     val up by impulse { ->
         pos += Pos.up
-        dir = 'u'
     }
 
     val down by impulse { ->
         pos += Pos.down
-        dir = 'd'
     }
 
     val damage by impulse { ->
@@ -156,10 +195,9 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container, 
     }
 }
 
-fun msoy() = (System.currentTimeMillis() - Date(2018, 1, 1).time).toInt()
-
-fun Revision.asMs() = time
-
+/**
+ * A bullet, hit tests with non-owner player in every frame.
+ */
 class Bullet(container: Container, start: Int, owner: Byte, val pos: Pos, val vel: Pos) : Entity(container), Drawable, Always {
     val start by key(start)
 
@@ -186,8 +224,8 @@ class Bullet(container: Container, start: Int, owner: Byte, val pos: Pos, val ve
         for (e in container.index.values)
             if (e is Player)
                 if (e.owner != owner
-                        && Math.abs(e.pos.x - px) < 5
-                        && Math.abs(e.pos.y - py) < 5) {
+                        && Math.abs(e.pos.x - px) < 10
+                        && Math.abs(e.pos.y - py) < 10) {
                     e.damage()
                     destroy()
                     break
@@ -215,7 +253,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
     private var container by notNull<Container>()
 
-    private var ex by notNull<Ex>()
+    private var ex by notNull<Root>()
 
     private val autosaveStream = DataOutputStream(FileOutputStream(File.createTempFile("autosave_", ".stream", File("saves"))))
 
@@ -270,7 +308,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
         channel.connect("Chat cluster")
 
-        ex = container.init(::Ex)
+        ex = container.init(::Root)
 
         channel.getState(null, 10000)
 
@@ -294,7 +332,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
     var randomly = false
 
 
-    val mine get() = container.find(listOf(author)) as? Player
+    val mine get() = container.findAuto<Player>(listOf(author))
 
     var lastFrequent: Int = -1
     var lastSometimes: Int = -1

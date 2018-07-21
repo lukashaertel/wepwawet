@@ -258,7 +258,7 @@ abstract class Container(val author: Byte) {
     }
 }
 
-inline fun <reified T> Container.findAKC(vararg remaining: Any?): T? {
+inline fun <reified T> Container.findAuto(vararg remaining: Any?): T? {
     val key = listOf(T::class.simpleName) + remaining
     return find(key) as T?
 }
