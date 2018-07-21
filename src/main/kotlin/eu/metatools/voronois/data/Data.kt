@@ -1,7 +1,6 @@
-package eu.metatools.wege.data
+package eu.metatools.voronois.data
 
 import kotlinx.serialization.Serializable
-import java.util.*
 
 @Serializable
 data class Identity(val id: String, val name: String)

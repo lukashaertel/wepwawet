@@ -1,6 +1,6 @@
-package eu.metatools.wege.game
+package eu.metatools.voronois.game
 
-import eu.metatools.wege.tools.*
+import eu.metatools.voronois.tools.*
 
 val baseMovement = 40
 

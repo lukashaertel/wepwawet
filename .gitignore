@@ -155,3 +155,4 @@ buildNumber.properties
 # Game relative files local to user
 uuid
 settings.json
+*.stream

@@ -1,4 +1,4 @@
-package eu.metatools.wege.tools
+package eu.metatools.voronois.tools
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.files.FileHandle

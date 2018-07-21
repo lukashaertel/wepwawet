@@ -1,4 +1,4 @@
-package eu.metatools.wege.tools
+package eu.metatools.voronois.tools
 
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.g2d.Batch

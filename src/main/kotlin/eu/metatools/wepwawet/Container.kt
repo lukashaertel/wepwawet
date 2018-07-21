@@ -2,7 +2,6 @@ package eu.metatools.wepwawet
 
 import eu.metatools.rome.Action
 import eu.metatools.rome.Repo
-import java.util.*
 
 /**
  * Undo in at container level, includes entity lookup.
@@ -257,4 +256,9 @@ abstract class Container(val author: Byte) {
             registerEntity(it)
         }
     }
+}
+
+inline fun <reified T> Container.findAKC(vararg remaining: Any?): T? {
+    val key = listOf(T::class.simpleName) + remaining
+    return find(key) as T?
 }

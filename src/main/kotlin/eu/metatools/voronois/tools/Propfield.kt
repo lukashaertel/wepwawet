@@ -1,11 +1,10 @@
-package eu.metatools.wege.tools
+package eu.metatools.voronois.tools
 
 import eu.metatools.common.asyncReduce
 import eu.metatools.common.awaitAll
 import eu.metatools.common.splits
 import kotlinx.coroutines.experimental.Deferred
 import kotlinx.coroutines.experimental.async
-import kotlinx.coroutines.experimental.runBlocking
 import java.util.*
 
 typealias Cost = Int

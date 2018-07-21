@@ -1,9 +1,7 @@
-package eu.metatools.wege.screens
+package eu.metatools.voronois.screens
 
 import com.badlogic.gdx.Gdx
-import com.badlogic.gdx.Input
 import com.badlogic.gdx.InputAdapter
-import com.badlogic.gdx.InputProcessor
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.OrthographicCamera
 import com.badlogic.gdx.maps.MapObject
@@ -18,9 +16,9 @@ import com.badlogic.gdx.scenes.scene2d.Stage
 import com.badlogic.gdx.scenes.scene2d.ui.Label
 import com.badlogic.gdx.utils.viewport.ScreenViewport
 import com.badlogic.gdx.utils.viewport.Viewport
-import eu.metatools.wege.*
-import eu.metatools.wege.game.*
-import eu.metatools.wege.tools.*
+import eu.metatools.voronois.*
+import eu.metatools.voronois.game.*
+import eu.metatools.voronois.tools.*
 import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.async.ktxAsync

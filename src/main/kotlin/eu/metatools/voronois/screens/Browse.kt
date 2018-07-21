@@ -1,14 +1,12 @@
-package eu.metatools.wege.screens
+package eu.metatools.voronois.screens
 
 import com.badlogic.gdx.scenes.scene2d.Stage
 import com.badlogic.gdx.scenes.scene2d.ui.Label
-import eu.metatools.net.*
-import eu.metatools.wege.WeltraumGefecht
-import eu.metatools.wege.tools.StageScreen
-import eu.metatools.wege.tools.dropLeft
-import eu.metatools.wege.tools.dropRight
-import eu.metatools.wege.tools.popScreen
-import kotlinx.coroutines.experimental.runBlocking
+import eu.metatools.voronois.WeltraumGefecht
+import eu.metatools.voronois.tools.StageScreen
+import eu.metatools.voronois.tools.dropLeft
+import eu.metatools.voronois.tools.dropRight
+import eu.metatools.voronois.tools.popScreen
 import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.scene2d.*

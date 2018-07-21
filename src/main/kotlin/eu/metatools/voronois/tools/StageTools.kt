@@ -1,10 +1,9 @@
-package eu.metatools.wege.tools
+package eu.metatools.voronois.tools
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.InputMultiplexer
 import com.badlogic.gdx.InputProcessor
 import com.badlogic.gdx.scenes.scene2d.Stage
-import ktx.app.KtxScreen
 import ktx.scene2d.KHorizontalGroup
 import ktx.scene2d.horizontalGroup
 

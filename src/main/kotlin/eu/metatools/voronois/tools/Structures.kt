@@ -1,4 +1,4 @@
-package eu.metatools.wege.tools
+package eu.metatools.voronois.tools
 
 import java.util.*
 

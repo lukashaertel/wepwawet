@@ -9,7 +9,6 @@ import org.w3c.dom.Element
 import java.io.File
 import java.io.InputStream
 import java.net.URL
-import kotlin.concurrent.getOrSet
 
 /**
  * [JChannel] that uses [BindingCoder] to transform messages.
@@ -72,22 +71,12 @@ class BindingChannel : JChannel {
                 BindingCoderBridge(bindingCoder, it)
             }
         }
-    /**
-     * Per thread output stream.
-     */
-    private val streams = ThreadLocal<ByteArrayDataOutputStream>()
 
     override fun send(dst: Address?, obj: Any?): JChannel {
-        // Get or initialize an output stream for the thread.
-        val target = streams.getOrSet {
-            ByteArrayDataOutputStream(bindingCoder.initialCapacity)
+        return ByteArrayDataOutputStream(bindingCoder.initialCapacity).let {
+            bindingCoder.encode(it, obj)
+            // Send to destination.
+            super.send(dst, it.buffer(), 0, it.position())
         }
-
-        // Reset stream and encode into it.
-        target.position(0)
-        bindingCoder.encode(target, obj)
-
-        // Send to destination.
-        return super.send(dst, target.buffer(), 0, target.position())
     }
 }

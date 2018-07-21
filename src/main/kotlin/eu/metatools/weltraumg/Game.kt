@@ -1,16 +1,12 @@
-package eu.metatools.wege
+package eu.metatools.weltraumg
 
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration
-import com.badlogic.gdx.maps.tiled.TmxMapLoader
 import com.badlogic.gdx.utils.viewport.ScreenViewport
-import eu.metatools.wege.data.*
-import eu.metatools.wege.screens.Loading
-import eu.metatools.wege.screens.Menu
-import eu.metatools.wege.tools.ExGame
-import eu.metatools.wege.tools.localFile
+import eu.metatools.voronois.data.Settings
+import eu.metatools.voronois.tools.ExGame
+import eu.metatools.voronois.tools.localFile
 import kotlinx.serialization.json.JSON
-import kotlinx.serialization.serializer
 import ktx.async.assets.AssetStorage
 import ktx.async.enableKtxCoroutines
 import ktx.async.ktxAsync
@@ -19,7 +15,7 @@ import java.util.*
 import kotlin.properties.Delegates
 
 /** ApplicationListener implementation. */
-class WeltraumGefecht : ExGame<WeltraumGefecht>() {
+class Game : ExGame<Game>() {
     val viewport = ScreenViewport().apply {
         unitsPerPixel = 1f / 2f
     }
@@ -53,7 +49,7 @@ class WeltraumGefecht : ExGame<WeltraumGefecht>() {
         super.create()
         enableKtxCoroutines(asynchronousExecutorConcurrencyLevel = 1)
         storage = AssetStorage()
-        storage.setLoader(TmxMapLoader(), "tmx")
+        // storage.setLoader(TmxMapLoader(), "tmx")
 
         ktxAsync {
             // Indicate loading, no resources explicitly needed
@@ -64,7 +60,6 @@ class WeltraumGefecht : ExGame<WeltraumGefecht>() {
 
             // Go to main menu
             replaceScreen(menu)
-
         }
     }
 
@@ -81,7 +76,7 @@ class WeltraumGefecht : ExGame<WeltraumGefecht>() {
 }
 
 fun main(args: Array<String>) {
-    Lwjgl3Application(WeltraumGefecht(), Lwjgl3ApplicationConfiguration().apply {
+    Lwjgl3Application(Game(), Lwjgl3ApplicationConfiguration().apply {
         // Config goes here
     })
 }

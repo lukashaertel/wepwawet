@@ -1,4 +1,4 @@
-package eu.metatools.wege.data
+package eu.metatools.voronois.data
 
 import kotlinx.serialization.Serializable
 
