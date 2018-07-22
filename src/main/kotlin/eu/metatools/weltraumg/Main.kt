@@ -332,7 +332,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
     var randomly = false
 
 
-    val mine get() = container.findAuto<Player>(listOf(author))
+    val mine get() = container.findAuto<Player>(author)
 
     var lastFrequent: Int = -1
     var lastSometimes: Int = -1
