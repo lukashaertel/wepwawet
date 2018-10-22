@@ -1,6 +1,7 @@
 package eu.metatools.wepwawet
 
 import eu.metatools.rome.Action
+import eu.metatools.wepwawet.Container.Periodic
 import eu.metatools.wepwawet.tools.*
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KMutableProperty1
@@ -12,9 +13,9 @@ import kotlin.reflect.KProperty
 private data class Box<out T>(val value: T)
 
 /**
- * Shared undoing state. If this is true, undoing is active.
+ * Shared blind state. If this is true, blind is active.
  */
-private val undoing = ThreadLocal.withInitial { false }
+private val blind = ThreadLocal.withInitial { false }
 
 /**
  * Shared tracking state. If this is true, tracking is active.
@@ -37,6 +38,16 @@ private val creates = ThreadLocal<MutableSet<Entity>>()
 private val deletes = ThreadLocal<MutableSet<Entity>>()
 
 /**
+ * Current registrations of periodics.
+ */
+private val register = ThreadLocal<MutableSet<Periodic>>()
+
+/**
+ * Current unregistration of periodics.
+ */
+private val unregister = ThreadLocal<MutableSet<Periodic>>()
+
+/**
  * A property bound to it's receiver.
  */
 private data class BoundProperty<T : Entity, R>(
@@ -50,7 +61,9 @@ private data class BoundProperty<T : Entity, R>(
 private data class EntityUndo(
         val unAssign: Map<BoundProperty<*, *>, Box<Any?>>,
         val unCreate: Set<Entity>,
-        val unDelete: Set<Entity>)
+        val unDelete: Set<Entity>,
+        val unRegister: Set<Periodic>,
+        val unUnregister: Set<Periodic>)
 
 /**
  * Auto generated key components for entities.
@@ -76,6 +89,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     private val table = arrayListOf<(Any?) -> Unit>()
 
+    private val periodics = hashSetOf<Periodic>()
+
     /**
      * Local key table for key computation.
      */
@@ -97,7 +112,6 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     internal fun primaryKey() = keys.map { it() }
 
-
     /**
      * Computes the run action for the call to [call] on argument [arg].
      */
@@ -108,6 +122,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 assigns.set(hashMapOf())
                 creates.set(hashSetOf())
                 deletes.set(hashSetOf())
+                register.set(hashSetOf())
+                unregister.set(hashSetOf())
 
                 // Activate tracking
                 tracking.set(true)
@@ -119,12 +135,12 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 tracking.set(false)
 
                 // Return undo
-                return EntityUndo(assigns.get(), creates.get(), deletes.get())
+                return EntityUndo(assigns.get(), creates.get(), deletes.get(), register.get(), unregister.get())
             }
 
             override fun undo(time: Revision, carry: EntityUndo) {
-                // Activate undoing
-                undoing.set(true)
+                // Activate blind
+                blind.set(true)
 
                 for ((k, v) in carry.unAssign)
                     @Suppress("unchecked_cast")
@@ -136,10 +152,19 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 for (e in carry.unDelete)
                     container.registerEntity(e)
 
-                // Deactivate undoing
-                undoing.set(false)
-            }
+                for (p in carry.unRegister) {
+                    container.unregisterPeriodic(p)
+                    periodics.remove(p)
+                }
 
+                for (p in carry.unUnregister) {
+                    container.restorePeriodic(p)
+                    periodics.add(p)
+                }
+
+                // Deactivate blind
+                blind.set(false)
+            }
         }
     }
 
@@ -148,11 +173,11 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     private fun trackSet(property: KMutableProperty1<Entity, Any?>) {
         // Check tracking validity
-        if (!tracking.get() && !undoing.get())
-            throw IllegalStateException("Setting from non-tracking or undoing area.")
+        if (!tracking.get() && !blind.get())
+            throw IllegalStateException("Setting from non-tracking or blind area.")
 
         // Put previous value, without overwriting.
-        if (!undoing.get())
+        if (!blind.get())
             assigns.get().computeIfAbsent(BoundProperty(this, property), { Box(property.get(this)) })
     }
 
@@ -161,15 +186,15 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     protected fun <E : Entity> create(constructor: (Container) -> E): E {
         // Validate call location
-        if (!tracking.get() && !undoing.get())
-            throw IllegalStateException("Creating from non-tracking or undoing area.")
+        if (!tracking.get() && !blind.get())
+            throw IllegalStateException("Creating from non-tracking or blind area.")
 
         // Execute and add to container
         val e = constructor(container)
         container.registerEntity(e)
 
-        // Track create if not undoing
-        if (!undoing.get())
+        // Track create if not blind
+        if (!blind.get())
             creates.get().add(e)
 
         return e
@@ -208,12 +233,19 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     protected fun delete(entity: Entity) {
         // Validate call location
-        if (!tracking.get() && !undoing.get())
-            throw IllegalStateException("Deleting from non-tracking or undoing area.")
+        if (!tracking.get() && !blind.get())
+            throw IllegalStateException("Deleting from non-tracking or blind area.")
 
-        // Track delete if not undoing
-        if (!undoing.get())
+        // Track delete and unregister if not blind
+        if (!blind.get()) {
             deletes.get().add(entity)
+            for (p in periodics)
+                unregister.get().add(p)
+        }
+
+        // Unregister all periodics
+        for (p in periodics)
+            container.unregisterPeriodic(p)
 
         // Execute and remove
         container.unregisterEntity(entity)
@@ -378,11 +410,79 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     protected fun <T : Entity> holdOptional(initial: T? = null, delta: (T?, T?) -> Unit) =
             prop(initial) { x, y ->
                 delta(x, y)
-                if (!undoing.get())
+                if (!blind.get())
                     if (x != null)
                         delete(x)
-
             }
+
+
+    private class Pulse<in R : Entity>(
+            val block: () -> Unit) : Delegate<R, PeriodicFunction> {
+        var periodic: Periodic? = null
+
+        override fun getValue(r: R, p: KProperty<*>) = periodicFunction({ delay, interval ->
+            println("Registering ${p.name}, $delay $interval at ${r.container.rev()}")
+
+            if (!tracking.get())
+                throw IllegalStateException("Cannot register periodic from outside impulse.")
+
+            // Do not register twice
+            if (periodic == null) {
+                // Register a new periodic
+                r.container.registerPeriodic(r.container.rev(), delay, interval, block).let {
+                    // Assign it for un-registration
+                    periodic = it
+
+                    // Add to local set of periodics for deletes.
+                    r.periodics.add(it)
+
+                    // Track registration
+                    register.get().add(it)
+                }
+            }
+        }, {
+            println("Unregistering ${p.name}, at ${r.container.rev()}")
+
+            if (!tracking.get())
+                throw IllegalStateException("Cannot unregister periodic from outside impulse.")
+
+            // Only apply if present
+            periodic?.let {
+                // Unregister the periodic
+                r.container.unregisterPeriodic(it)
+
+                // Remove from local set of periodics for deletes.
+                r.periodics.remove(it)
+
+                // Reset it
+                periodic = null
+
+                // Track un-registration
+                unregister.get().add(it)
+            }
+
+        })
+
+    }
+
+    protected fun <R : Entity> R.pulse(block: () -> Unit) = Provider { r: R, p ->
+        if (p is KMutableProperty<*>)
+            throw IllegalArgumentException("Pulses cannot be mutable fields.")
+
+        Pulse<R> {
+            if (tracking.get())
+                throw IllegalStateException("Pulse body called from a tracking method.")
+
+            // Activate blind mode, everyone shares the pulse so block is safe.
+            blind.set(true)
+
+            // Invoke block.
+            block()
+
+            // Reset tracking.
+            blind.set(false)
+        }
+    }
 
     /**
      * Creates a single entity container that can be nullable. On value change, non-contained entities will be
@@ -404,7 +504,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     protected fun <T : Entity> holdOne(initial: T, delta: (T, T) -> Unit) =
             prop(initial) { x, y ->
                 delta(x, y)
-                if (!undoing.get())
+                if (!blind.get())
                     delete(x)
             }
 
@@ -427,7 +527,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     protected fun <T : Entity> holdMany(initial: List<T> = listOf(), delta: (List<T>, List<T>) -> Unit) =
             prop(initial) { xs, ys ->
                 delta(xs, ys)
-                if (!undoing.get())
+                if (!blind.get())
                     for (x in xs)
                         if (x !in ys)
                             delete(x)
@@ -446,7 +546,6 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     protected fun <T : Entity> holdMany(initial: List<T> = listOf()) =
             holdMany(initial) { _, _ -> }
-
 
     /**
      * An impulse without arguments.
@@ -734,4 +833,5 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
 
         Impulse4((r.table.size - 1).toByte(), block)
     }
+
 }

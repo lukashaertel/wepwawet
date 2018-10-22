@@ -6,7 +6,7 @@ import com.google.common.collect.ComparisonChain
  * Revision with author in [eu.metatools.rome.Repo].
  */
 data class Revision(
-        val time: Int,
+        val time: Long,
         val inner: Short,
         val author: Byte) : Comparable<Revision> {
     override fun compareTo(other: Revision) = ComparisonChain.start()

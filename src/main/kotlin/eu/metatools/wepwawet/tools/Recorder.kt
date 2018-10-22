@@ -19,12 +19,12 @@ class Recorder<T : Any>(val container: Container, val length: Int, val point: Bo
     /**
      * Internal store of values.
      */
-    private val store = TreeMap<Int, T>()
+    private val store = TreeMap<Long, T>()
 
     /**
      * Does the interpolation for two map entries and a time.
      */
-    private fun interpolate(lower: Map.Entry<Int, T>, higher: Map.Entry<Int, T>, time: Int): T {
+    private fun interpolate(lower: Map.Entry<Long, T>, higher: Map.Entry<Long, T>, time: Long): T {
         val t = (time - lower.key).toDouble() / (higher.key - lower.key)
         return interpolator.get().interpolate(lower.value, t, higher.value)
     }
@@ -40,7 +40,7 @@ class Recorder<T : Any>(val container: Container, val length: Int, val point: Bo
     /**
      * Extrapolate/interpolate at the given time.
      */
-    fun exin(time: Int): T? {
+    fun exin(time: Long): T? {
         // TODO: Include higher order interpolation
         when (store.size) {
             0 -> return null

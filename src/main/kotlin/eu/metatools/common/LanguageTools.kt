@@ -1,7 +1,5 @@
 package eu.metatools.common
 
-import java.util.*
-
 /**
  * Calls the block if the receiver is of type [T], otherwise does not apply the block.
  */
@@ -100,3 +98,12 @@ fun <K, V> Map<K, V>.except(key: K) =
 
 infix fun <T> T.iff(condition: Boolean): T? = if (condition) this else null
 inline infix fun <T> T.iff(condition: () -> Boolean): T? = if (condition()) this else null
+
+infix fun Int.pmod(other: Int) =
+        (other + (this % other)) % other
+
+infix fun Long.pmod(other: Long) =
+        (other + (this % other)) % other
+
+infix fun Long.pmod(other: Int) =
+        (other + (this % other)) % other

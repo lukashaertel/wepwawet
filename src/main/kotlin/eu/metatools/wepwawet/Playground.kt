@@ -140,7 +140,7 @@ fun playGame(gui: MultiWindowTextGUI, container: Container, calls: Channel<CallC
                 for ((r, i, c, a) in generateSequence { calls.poll() })
                     receive(r, i, c, a)
 
-                time = (System.currentTimeMillis() - s).toInt()
+                time = (System.currentTimeMillis() - s)
                 repo.softUpper = rev()
 
 

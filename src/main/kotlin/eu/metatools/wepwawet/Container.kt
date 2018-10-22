@@ -1,5 +1,6 @@
 package eu.metatools.wepwawet
 
+import eu.metatools.common.pmod
 import eu.metatools.rome.Action
 import eu.metatools.rome.Repo
 
@@ -22,7 +23,7 @@ abstract class Container(val author: Byte) {
     /**
      * Substitute outer time.
      */
-    private var subTime: Int? = null
+    private var subTime: Long? = null
 
     /**
      * Substitute inner time.
@@ -37,7 +38,7 @@ abstract class Container(val author: Byte) {
     /**
      * Run block in substituted time.
      */
-    private inline fun <T> subIn(time: Int?, inner: Short?, author: Byte?, block: () -> T): T {
+    private inline fun <T> subIn(time: Long?, inner: Short?, author: Byte?, block: () -> T): T {
         val prevSubTime = subTime
         val prevSubInner = subInner
         val prevSubAuthor = subAuthor
@@ -56,7 +57,7 @@ abstract class Container(val author: Byte) {
     /**
      * Backing for the current insert time.
      */
-    private var timeBacking: Int = 0
+    private var timeBacking: Long = 0
 
     /**
      * Backing for the inner insert time.
@@ -66,7 +67,7 @@ abstract class Container(val author: Byte) {
     /**
      * Calculates the next open inner revision time for the given [time].
      */
-    internal fun openInner(time: Int): Short {
+    internal fun openInner(time: Long): Short {
         // Get revision sub set for the time region
         val area = repo.revisions.subSet(
                 Revision(time, Short.MIN_VALUE, author),
@@ -89,7 +90,7 @@ abstract class Container(val author: Byte) {
     /**
      * Calculates the next open revision for the given [time].
      */
-    internal fun openTime(time: Int) =
+    internal fun openTime(time: Long) =
             Revision(time, openInner(time), author)
 
     /**
@@ -122,7 +123,7 @@ abstract class Container(val author: Byte) {
     /**
      * Repository for change rollback.
      */
-    internal val repo = Repo<Revision>()
+    internal val repo = Repo<Revision>().also { it.softUpper = Revision(0, Short.MAX_VALUE, Byte.MAX_VALUE) }
 
     /**
      * Map of primary key to entities.
@@ -215,7 +216,6 @@ abstract class Container(val author: Byte) {
      * Handles an external [call] on [id] with argument [arg].
      */
     fun receive(time: Revision, id: List<Any?>, call: Byte, arg: Any?) {
-
         // Insert into repository
         repo.insert(object : Action<Revision, ContainerUndo?> {
             override fun exec(time: Revision): ContainerUndo? {
@@ -256,9 +256,79 @@ abstract class Container(val author: Byte) {
             registerEntity(it)
         }
     }
+
+    /**
+     * Periodic registry.
+     * @property key The associated key of this periodic
+     * @property origin The origin of the time sequence
+     * @property interval The interval of the time sequence
+     * @property block The block to execute
+     */
+    internal data class Periodic(val key: Any, val origin: Long, val interval: Int, var last: Long?, val block: () -> Unit) {
+        private fun firstOffset(current: Long) =
+                (origin - current) pmod interval
+
+        fun allBetween(current: Long, to: Long) =
+                generateSequence(current + firstOffset(current)) {
+                    it + interval
+                }.takeWhile {
+                    it < to
+                }
+
+    }
+
+    /**
+     * Table of periodic calls. These are all an effect of local impulses and are not exchanged.
+     */
+    private val periodic = mutableMapOf<Any, Periodic>()
+
+    /**
+     * Registers a periodic block.
+     * @param origin The origin of the time sequence
+     * @param interval The interval of the time sequence
+     * @param block The block to run
+     * @return Returns the registry entry.
+     */
+    internal fun registerPeriodic(at: Revision, delay: Int, interval: Int, block: () -> Unit) =
+            Any().let { k ->
+                Periodic(k, at.time + delay, interval, null, block).also {
+                    periodic[k] = it
+                }
+            }
+
+    /**
+     * Restores a periodic registry entry.
+     */
+    internal fun restorePeriodic(restore: Periodic) {
+        periodic[restore.key] = restore
+    }
+
+    /**
+     * Unregisters a periodic block.
+     */
+    internal fun unregisterPeriodic(unregister: Periodic) {
+        periodic.remove(unregister.key)
+    }
+
+    fun revise(targetTime: Long) {
+        for (p in periodic.values) {
+            for (t in p.allBetween(p.last ?: p.origin, targetTime))
+                subIn(t, null, Byte.MAX_VALUE, p.block)
+            p.last = targetTime
+        }
+
+        time = targetTime
+        repo.softUpper = Revision(targetTime, Short.MAX_VALUE, Byte.MAX_VALUE)
+    }
 }
 
 inline fun <reified T> Container.findAuto(vararg remaining: Any?): T? {
     val key = listOf(T::class.simpleName) + remaining
     return find(key) as T?
 }
+
+/**
+ * Gets the entity for the ID.
+ */
+fun Container.findBy(vararg id: Any?) =
+        find(id.toList())

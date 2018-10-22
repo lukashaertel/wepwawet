@@ -29,15 +29,16 @@ import ktx.scene2d.button
 import ktx.scene2d.label
 import org.jgroups.Global
 import org.jgroups.Message
-import java.io.*
-import java.util.*
+import java.io.DataInputStream
+import java.io.File
+import java.io.FileInputStream
 import kotlin.properties.Delegates.notNull
 
 /**
  * Transferred call.
  */
 @Serializable
-data class Call(val time: Int,
+data class Call(val time: Long,
                 val inner: Short,
                 val author: Byte,
                 val ids: List<Any?>,
@@ -89,11 +90,6 @@ interface Frequent : Periodic
 interface Sometimes : Periodic
 
 /**
- * Milliseconds of year.
- */
-fun msoy() = (System.currentTimeMillis() - Date(2018, 1, 1).time).toInt()
-
-/**
  * Get the time of the revision in ms.
  */
 fun Revision.asMs() = time
@@ -128,7 +124,7 @@ class Root(container: Container) : Entity(container) {
         shotPower -= 10
     }
     val spawn by impulse { owner: Byte, start: Pos ->
-        create(::Player, owner, start)
+        create(::Player, owner, start).change()
     }
 }
 
@@ -146,7 +142,15 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
     }
 
     override fun draw(batch: Batch, parentAlpha: Float) {
-        batch.color = Color.RED.cpy().lerp(Color.WHITE, health.toFloat() / 100f)
+        val src = when (color) {
+            0 -> Color.RED
+            1 -> Color.YELLOW
+            2 -> Color.GREEN
+            3 -> Color.CYAN
+            4 -> Color.BLUE
+            else -> Color.PURPLE
+        }
+        batch.color = Color.RED.cpy().lerp(src, health.toFloat() / 100f)
 
         batch.draw(Main.white, pos.x.toFloat() - 10f, pos.y.toFloat() - 10f, 20f, 20f)
     }
@@ -156,6 +160,8 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
     var pos by prop(start)
 
     var health by prop(100)
+
+    var color by prop(0)
 
     val right by impulse { ->
         pos += Pos.right
@@ -179,6 +185,14 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
             delete(this)
     }
 
+    val changeColor by pulse {
+        color = (color + 1) % 6
+    }
+
+    val change by impulse { ->
+        changeColor.register(1000, 1000)
+    }
+
     val shoot by impulse { dx: Int, dy: Int ->
         all?.let {
             if (it.shotPower > 0) {
@@ -198,7 +212,7 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
 /**
  * A bullet, hit tests with non-owner player in every frame.
  */
-class Bullet(container: Container, start: Int, owner: Byte, val pos: Pos, val vel: Pos) : Entity(container), Drawable, Always {
+class Bullet(container: Container, start: Long, owner: Byte, val pos: Pos, val vel: Pos) : Entity(container), Drawable, Always {
     val start by key(start)
 
     val owner by key(owner)
@@ -255,7 +269,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
     private var ex by notNull<Root>()
 
-    private val autosaveStream = DataOutputStream(FileOutputStream(File.createTempFile("autosave_", ".stream", File("saves"))))
+    //private val autosaveStream = DataOutputStream(FileOutputStream(File.createTempFile("autosave_", ".stream", File("saves"))))
 
     override fun show() {
         // Get coder.
@@ -271,7 +285,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
             override fun dispatch(time: Revision, id: List<Any?>, call: Byte, arg: Any?) {
                 synchronized(container) {
                     val message = Call(time.time, time.inner, time.author, id, call, arg)
-                    coder.encode(autosaveStream, message)
+                    //coder.encode(autosaveStream, message)
 
                     history = history.copy(history.calls + message)
                     channel.send(null, message)
@@ -334,13 +348,12 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
     val mine get() = container.findAuto<Player>(author)
 
-    var lastFrequent: Int = -1
-    var lastSometimes: Int = -1
+    var lastFrequent: Long = -1
+    var lastSometimes: Long = -1
     var lastDown = false
     override fun render(delta: Float) {
         synchronized(container) {
-            container.time = msoy()
-            container.repo.softUpper = container.rev()
+            container.revise(System.currentTimeMillis())
 
             if (mine == null && Gdx.input.isKeyJustPressed(Input.Keys.B)) {
                 ex.spawn(author, Pos((Math.random() * 300).toInt(), (Math.random() * 300).toInt()))
@@ -379,7 +392,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
                         batch.draw(white, (i * 15).toFloat(), 0f, 5f, 5f)
                     }
 
-                    val time = msoy()
+                    val time = System.currentTimeMillis()
                     var cfreq = false
                     var csom = false
                     if (lastFrequent + 50 < time) {
