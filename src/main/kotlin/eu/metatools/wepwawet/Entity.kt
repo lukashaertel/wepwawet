@@ -1,7 +1,6 @@
 package eu.metatools.wepwawet
 
 import eu.metatools.rome.Action
-import eu.metatools.wepwawet.tools.*
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KMutableProperty1
 import kotlin.reflect.KProperty
@@ -151,7 +150,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
 
         // Put previous value, without overwriting.
         if (!blind.get())
-            assigns.get().computeIfAbsent(BoundProperty(this, property), { Box(property.get(this)) })
+            assigns.get().computeIfAbsent(BoundProperty(this, property)) { Box(property.get(this)) }
     }
 
     /**
@@ -184,22 +183,22 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      * Creates an entity with the given constructor and registers it with the container.
      */
     protected fun <E : Entity, A1, A2> create(
-            constructor: (Container, A1, A2) -> E, arg1: A1, arg2: A2) =
-            create { constructor(it, arg1, arg2) }
+            constructor: (Container, A1, A2) -> E, a1: A1, a2: A2) =
+            create { constructor(it, a1, a2) }
 
     /**
      * Creates an entity with the given constructor and registers it with the container.
      */
     protected fun <E : Entity, A1, A2, A3> create(
-            constructor: (Container, A1, A2, A3) -> E, arg1: A1, arg2: A2, arg3: A3) =
-            create { constructor(it, arg1, arg2, arg3) }
+            constructor: (Container, A1, A2, A3) -> E, a1: A1, a2: A2, a3: A3) =
+            create { constructor(it, a1, a2, a3) }
 
     /**
      * Creates an entity with the given constructor and registers it with the container.
      */
     protected fun <E : Entity, A1, A2, A3, A4> create(
-            constructor: (Container, A1, A2, A3, A4) -> E, arg1: A1, arg2: A2, arg3: A3, arg4: A4) =
-            create { constructor(it, arg1, arg2, arg3, arg4) }
+            constructor: (Container, A1, A2, A3, A4) -> E, a1: A1, a2: A2, a3: A3, a4: A4) =
+            create { constructor(it, a1, a2, a3, a4) }
 
     /**
      * Deletes the entity.
@@ -218,18 +217,6 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     }
 
     /**
-     * Formats the members for [toString].
-     */
-    open fun toStringMembers() = ""
-
-    override fun toString() = toStringMembers().let {
-        if (it.isNotEmpty())
-            "[${javaClass.simpleName}, key=${primaryKey()}, $it]"
-        else
-            "[${javaClass.simpleName}, key=${primaryKey()}]"
-    }
-
-    /**
      * A proxy for an entity, i.e., to be resolved by the container.
      */
     private data class EntityProxy(val id: List<Any?>)
@@ -237,33 +224,22 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     /**
      * Tries to convert to a proxy or returns identity.
      */
-    private fun tryToProxy(any: Any?) =
-            if (any is Entity)
-                toProxy(any)
-            else
-                any
+    private fun tryToProxy(any: Any?) = if (any is Entity) toProxy(any) else any
 
     /**
      * Tries to convert from a proxy or returns identity.
      */
-    private fun tryFromProxy(any: Any?) =
-            if (any is EntityProxy)
-                fromProxy(any)
-            else
-                any
-
+    private fun tryFromProxy(any: Any?) = if (any is EntityProxy) fromProxy(any) else any
 
     /**
      * Converts to a proxy.
      */
-    private fun toProxy(entity: Entity) =
-            EntityProxy(entity.primaryKey())
+    private fun toProxy(entity: Entity) = EntityProxy(entity.primaryKey())
 
     /**
      * Converts from a proxy.
      */
-    private fun fromProxy(entityProxy: EntityProxy) =
-            container.find(entityProxy.id)
+    private fun fromProxy(entityProxy: EntityProxy) = container.find(entityProxy.id)
 
     /**
      * A tracking property identifying the entity.
@@ -354,26 +330,14 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     /**
      * Creates a tracking property with a delta reactor.
      */
-    protected fun <T> prop(initial: T, delta: (T, T) -> Unit): Delegate<Entity, T> =
+    protected fun <T> prop(initial: T, delta: (T, T) -> Unit = { _, _ -> }): Delegate<Entity, T> =
             Property(initial, delta)
-
-    /**
-     * Creates a tracking property with a delta reactor.
-     */
-    protected fun <T> prop(initial: T, new: (T) -> Unit): Delegate<Entity, T> =
-            prop(initial) { _, y -> new(y) }
-
-    /**
-     * Creates a tracking property.
-     */
-    protected fun <T> prop(initial: T) =
-            prop(initial) { _, _ -> }
 
     /**
      * Creates a single entity container that can be nullable. On value change, non-contained entities will be
      * removed. When not given explicitly, the property will be initialized with null.
      */
-    protected fun <T : Entity> holdOptional(initial: T? = null, delta: (T?, T?) -> Unit) =
+    protected fun <T : Entity> holdOptional(initial: T? = null, delta: (T?, T?) -> Unit = { _, _ -> }) =
             prop(initial) { x, y ->
                 delta(x, y)
                 if (!blind.get())
@@ -382,23 +346,9 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             }
 
     /**
-     * Creates a single entity container that can be nullable. On value change, non-contained entities will be
-     * removed. When not given explicitly, the property will be initialized with null.
-     */
-    protected fun <T : Entity> holdOptional(initial: T? = null, new: (T?) -> Unit) =
-            holdOptional(initial) { _, y -> new(y) }
-
-    /**
-     * Creates a single entity container that can be nullable. On value change, non-contained entities will be
-     * removed. When not given explicitly, the property will be initialized with null.
-     */
-    protected fun <T : Entity> holdOptional(initial: T? = null) =
-            holdOptional(initial) { _, _ -> }
-
-    /**
      * Creates a single entity container. On value change, non-contained entities will be removed.
      */
-    protected fun <T : Entity> holdOne(initial: T, delta: (T, T) -> Unit) =
+    protected fun <T : Entity> holdOne(initial: T, delta: (T, T) -> Unit = { _, _ -> }) =
             prop(initial) { x, y ->
                 delta(x, y)
                 if (!blind.get())
@@ -406,22 +356,10 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             }
 
     /**
-     * Creates a single entity container. On value change, non-contained entities will be removed.
-     */
-    protected fun <T : Entity> holdOne(initial: T, new: (T) -> Unit) =
-            holdOne(initial) { _, y -> new(y) }
-
-    /**
-     * Creates a single entity container. On value change, non-contained entities will be removed.
-     */
-    protected fun <T : Entity> holdOne(initial: T) =
-            holdOne(initial) { _, _ -> }
-
-    /**
      * Creates a many object container. On value change, non-contained entities will be removed. When not given
      * explicitly, the property will be initialized with an empty list.
      */
-    protected fun <T : Entity> holdMany(initial: List<T> = listOf(), delta: (List<T>, List<T>) -> Unit) =
+    protected fun <T : Entity> holdMany(initial: List<T> = listOf(), delta: (List<T>, List<T>) -> Unit = { _, _ -> }) =
             prop(initial) { xs, ys ->
                 delta(xs, ys)
                 if (!blind.get())
@@ -431,26 +369,12 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             }
 
     /**
-     * Creates a many object container. On value change, non-contained entities will be removed. When not given
-     * explicitly, the property will be initialized with an empty list.
-     */
-    protected fun <T : Entity> holdMany(initial: List<T> = listOf(), new: (List<T>) -> Unit) =
-            holdMany(initial) { _, y -> new(y) }
-
-    /**
-     * Creates a many object container. On value change, non-contained entities will be removed. When not given
-     * explicitly, the property will be initialized with an empty list.
-     */
-    protected fun <T : Entity> holdMany(initial: List<T> = listOf()) =
-            holdMany(initial) { _, _ -> }
-
-    /**
      * An impulse without arguments.
      */
     private class Impulse0<in R : Entity>(
             val call: Byte,
-            val block: R.() -> Unit) : Delegate<R, IndexFunction0<Double, Unit>> {
-        override fun getValue(r: R, p: KProperty<*>) = indexFunction<Double, Unit>({ ->
+            val block: R.() -> Unit) : Delegate<R, () -> Unit> {
+        override fun getValue(r: R, p: KProperty<*>) = { ->
             // Check that key is present
             if (!r.hasKey())
                 throw IllegalStateException("Cannot call impulse entity without key.")
@@ -465,20 +389,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 r.container.dispatch(r.container.rev(), key, call, Unit)
                 r.container.incInner()
             }
-        }, { delay ->
-            if (tracking.get())
-                throw IllegalStateException("Cannot delay from within impulse.")
-
-            val prev = r.container.time
-            r.container.time += (delay * 1000.0).toInt()
-
-            val key = r.primaryKey()
-            r.container.receive(r.container.rev(), key, call, Unit)
-            r.container.dispatch(r.container.rev(), key, call, Unit)
-            r.container.incInner()
-
-            r.container.time = prev
-        })
+        }
     }
 
     /**
@@ -502,8 +413,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     private class Impulse1<in R : Entity, A>(
             val call: Byte,
-            val block: R.(A) -> Unit) : Delegate<R, IndexFunction1<A, Double, Unit>> {
-        override fun getValue(r: R, p: KProperty<*>) = indexFunction<A, Double, Unit>({ arg ->
+            val block: R.(A) -> Unit) : Delegate<R, (A) -> Unit> {
+        override fun getValue(r: R, p: KProperty<*>) = { arg: A ->
             // Check that key is present
             if (!r.hasKey())
                 throw IllegalStateException("Cannot call impulse entity without key.")
@@ -519,21 +430,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 r.container.dispatch(r.container.rev(), key, call, parg)
                 r.container.incInner()
             }
-        }, { arg, delay ->
-            if (tracking.get())
-                throw IllegalStateException("Cannot delay from within impulse.")
-
-            val prev = r.container.time
-            r.container.time += (delay * 1000.0).toInt()
-
-            val key = r.primaryKey()
-            val parg = r.tryToProxy(arg)
-            r.container.receive(r.container.rev(), key, call, parg)
-            r.container.dispatch(r.container.rev(), key, call, parg)
-            r.container.incInner()
-
-            r.container.time = prev
-        })
+        }
     }
 
     /**
@@ -557,8 +454,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     private class Impulse2<in R : Entity, A1, A2>(
             val call: Byte,
-            val block: R.(A1, A2) -> Unit) : Delegate<R, IndexFunction2<A1, A2, Double, Unit>> {
-        override fun getValue(r: R, p: KProperty<*>) = indexFunction<A1, A2, Double, Unit>({ arg1, arg2 ->
+            val block: R.(A1, A2) -> Unit) : Delegate<R, (A1, A2) -> Unit> {
+        override fun getValue(r: R, p: KProperty<*>) = { a1: A1, a2: A2 ->
             // Check that key is present
             if (!r.hasKey())
                 throw IllegalStateException("Cannot call impulse entity without key.")
@@ -567,28 +464,14 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             val key = r.primaryKey()
 
             if (tracking.get())
-                r.block(arg1, arg2)
+                r.block(a1, a2)
             else {
-                val parg = listOf(r.tryToProxy(arg1), r.tryToProxy(arg2))
+                val parg = listOf(r.tryToProxy(a1), r.tryToProxy(a2))
                 r.container.receive(r.container.rev(), key, call, parg)
                 r.container.dispatch(r.container.rev(), key, call, parg)
                 r.container.incInner()
             }
-        }, { arg1, arg2, delay ->
-            if (tracking.get())
-                throw IllegalStateException("Cannot delay from within impulse.")
-
-            val prev = r.container.time
-            r.container.time += (delay * 1000.0).toInt()
-
-            val key = r.primaryKey()
-            val parg = listOf(r.tryToProxy(arg1), r.tryToProxy(arg2))
-            r.container.receive(r.container.rev(), key, call, parg)
-            r.container.dispatch(r.container.rev(), key, call, parg)
-            r.container.incInner()
-
-            r.container.time = prev
-        })
+        }
     }
 
     /**
@@ -601,10 +484,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             throw IllegalArgumentException("Impulses cannot be mutable fields.")
 
         r.table.add { parg ->
-            val arg = parg as List<*>
-            val arg1 = tryFromProxy(arg[0]) as A1
-            val arg2 = tryFromProxy(arg[1]) as A2
-            block(arg1, arg2)
+            val (a1, a2) = parg as List<*>
+            block(tryFromProxy(a1) as A1, tryFromProxy(a2) as A2)
         }
 
         Impulse2((r.table.size - 1).toByte(), block)
@@ -616,8 +497,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     private class Impulse3<in R : Entity, A1, A2, A3>(
             val call: Byte,
-            val block: R.(A1, A2, A3) -> Unit) : Delegate<R, IndexFunction3<A1, A2, A3, Double, Unit>> {
-        override fun getValue(r: R, p: KProperty<*>) = indexFunction<A1, A2, A3, Double, Unit>({ arg1, arg2, arg3 ->
+            val block: R.(A1, A2, A3) -> Unit) : Delegate<R, (A1, A2, A3) -> Unit> {
+        override fun getValue(r: R, p: KProperty<*>) = { a1: A1, a2: A2, a3: A3 ->
             // Check that key is present
             if (!r.hasKey())
                 throw IllegalStateException("Cannot call impulse entity without key.")
@@ -626,28 +507,14 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             val key = r.primaryKey()
 
             if (tracking.get())
-                r.block(arg1, arg2, arg3)
+                r.block(a1, a2, a3)
             else {
-                val parg = listOf(r.tryToProxy(arg1), r.tryToProxy(arg2), r.tryToProxy(arg3))
+                val parg = listOf(r.tryToProxy(a1), r.tryToProxy(a2), r.tryToProxy(a3))
                 r.container.receive(r.container.rev(), key, call, parg)
                 r.container.dispatch(r.container.rev(), key, call, parg)
                 r.container.incInner()
             }
-        }, { arg1, arg2, arg3, delay ->
-            if (tracking.get())
-                throw IllegalStateException("Cannot delay from within impulse.")
-
-            val prev = r.container.time
-            r.container.time += (delay * 1000.0).toInt()
-
-            val key = r.primaryKey()
-            val parg = listOf(r.tryToProxy(arg1), r.tryToProxy(arg2), r.tryToProxy(arg3))
-            r.container.receive(r.container.rev(), key, call, parg)
-            r.container.dispatch(r.container.rev(), key, call, parg)
-            r.container.incInner()
-
-            r.container.time = prev
-        })
+        }
     }
 
     /**
@@ -660,11 +527,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             throw IllegalArgumentException("Impulses cannot be mutable fields.")
 
         r.table.add { parg ->
-            val arg = parg as List<*>
-            val arg1 = tryFromProxy(arg[0]) as A1
-            val arg2 = tryFromProxy(arg[1]) as A2
-            val arg3 = tryFromProxy(arg[2]) as A3
-            block(arg1, arg2, arg3)
+            val (a1, a2, a3) = parg as List<*>
+            block(tryFromProxy(a1) as A1, tryFromProxy(a2) as A2, tryFromProxy(a3) as A3)
         }
 
         Impulse3((r.table.size - 1).toByte(), block)
@@ -676,8 +540,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     private class Impulse4<in R : Entity, A1, A2, A3, A4>(
             val call: Byte,
-            val block: R.(A1, A2, A3, A4) -> Unit) : Delegate<R, IndexFunction4<A1, A2, A3, A4, Double, Unit>> {
-        override fun getValue(r: R, p: KProperty<*>) = indexFunction<A1, A2, A3, A4, Double, Unit>({ arg1, arg2, arg3, arg4 ->
+            val block: R.(A1, A2, A3, A4) -> Unit) : Delegate<R, (A1, A2, A3, A4) -> Unit> {
+        override fun getValue(r: R, p: KProperty<*>) = { a1: A1, a2: A2, a3: A3, a4: A4 ->
             // Check that key is present
             if (!r.hasKey())
                 throw IllegalStateException("Cannot call impulse entity without key.")
@@ -686,28 +550,14 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             val key = r.primaryKey()
 
             if (tracking.get())
-                r.block(arg1, arg2, arg3, arg4)
+                r.block(a1, a2, a3, a4)
             else {
-                val parg = listOf(r.tryToProxy(arg1), r.tryToProxy(arg2), r.tryToProxy(arg3), r.tryToProxy(arg4))
+                val parg = listOf(r.tryToProxy(a1), r.tryToProxy(a2), r.tryToProxy(a3), r.tryToProxy(a4))
                 r.container.receive(r.container.rev(), key, call, parg)
                 r.container.dispatch(r.container.rev(), key, call, parg)
                 r.container.incInner()
             }
-        }, { arg1, arg2, arg3, arg4, delay ->
-            if (tracking.get())
-                throw IllegalStateException("Cannot delay from within impulse.")
-
-            val prev = r.container.time
-            r.container.time += (delay * 1000.0).toInt()
-
-            val key = r.primaryKey()
-            val parg = listOf(r.tryToProxy(arg1), r.tryToProxy(arg2), r.tryToProxy(arg3), r.tryToProxy(arg4))
-            r.container.receive(r.container.rev(), key, call, parg)
-            r.container.dispatch(r.container.rev(), key, call, parg)
-            r.container.incInner()
-
-            r.container.time = prev
-        })
+        }
     }
 
     /**
@@ -720,12 +570,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             throw IllegalArgumentException("Impulses cannot be mutable fields.")
 
         r.table.add { parg ->
-            val arg = parg as List<*>
-            val arg1 = tryFromProxy(arg[0]) as A1
-            val arg2 = tryFromProxy(arg[1]) as A2
-            val arg3 = tryFromProxy(arg[2]) as A3
-            val arg4 = tryFromProxy(arg[3]) as A4
-            block(arg1, arg2, arg3, arg4)
+            val (a1, a2, a3, a4) = parg as List<*>
+            block(tryFromProxy(a1) as A1, tryFromProxy(a2) as A2, tryFromProxy(a3) as A3, tryFromProxy(a4) as A4)
         }
 
         Impulse4((r.table.size - 1).toByte(), block)
