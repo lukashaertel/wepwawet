@@ -1,6 +1,5 @@
 package eu.metatools.wepwawet
 
-import eu.metatools.common.pmod
 import eu.metatools.rome.Action
 import eu.metatools.rome.Repo
 
@@ -257,66 +256,7 @@ abstract class Container(val author: Byte) {
         }
     }
 
-    /**
-     * Periodic registry.
-     * @property key The associated key of this periodic
-     * @property origin The origin of the time sequence
-     * @property interval The interval of the time sequence
-     * @property block The block to execute
-     */
-    internal data class Periodic(val key: Any, val origin: Long, val interval: Int, var last: Long?, val block: () -> Unit) {
-        private fun firstOffset(current: Long) =
-                (origin - current) pmod interval
-
-        fun allBetween(current: Long, to: Long) =
-                generateSequence(current + firstOffset(current)) {
-                    it + interval
-                }.takeWhile {
-                    it < to
-                }
-
-    }
-
-    /**
-     * Table of periodic calls. These are all an effect of local impulses and are not exchanged.
-     */
-    private val periodic = mutableMapOf<Any, Periodic>()
-
-    /**
-     * Registers a periodic block.
-     * @param origin The origin of the time sequence
-     * @param interval The interval of the time sequence
-     * @param block The block to run
-     * @return Returns the registry entry.
-     */
-    internal fun registerPeriodic(at: Revision, delay: Int, interval: Int, block: () -> Unit) =
-            Any().let { k ->
-                Periodic(k, at.time + delay, interval, null, block).also {
-                    periodic[k] = it
-                }
-            }
-
-    /**
-     * Restores a periodic registry entry.
-     */
-    internal fun restorePeriodic(restore: Periodic) {
-        periodic[restore.key] = restore
-    }
-
-    /**
-     * Unregisters a periodic block.
-     */
-    internal fun unregisterPeriodic(unregister: Periodic) {
-        periodic.remove(unregister.key)
-    }
-
     fun revise(targetTime: Long) {
-        for (p in periodic.values) {
-            for (t in p.allBetween(p.last ?: p.origin, targetTime))
-                subIn(t, null, Byte.MAX_VALUE, p.block)
-            p.last = targetTime
-        }
-
         time = targetTime
         repo.softUpper = Revision(targetTime, Short.MAX_VALUE, Byte.MAX_VALUE)
     }

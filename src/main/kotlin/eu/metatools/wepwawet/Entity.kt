@@ -38,16 +38,6 @@ private val creates = ThreadLocal<MutableSet<Entity>>()
 private val deletes = ThreadLocal<MutableSet<Entity>>()
 
 /**
- * Current registrations of periodics.
- */
-private val register = ThreadLocal<MutableSet<Periodic>>()
-
-/**
- * Current unregistration of periodics.
- */
-private val unregister = ThreadLocal<MutableSet<Periodic>>()
-
-/**
  * A property bound to it's receiver.
  */
 private data class BoundProperty<T : Entity, R>(
@@ -61,9 +51,7 @@ private data class BoundProperty<T : Entity, R>(
 private data class EntityUndo(
         val unAssign: Map<BoundProperty<*, *>, Box<Any?>>,
         val unCreate: Set<Entity>,
-        val unDelete: Set<Entity>,
-        val unRegister: Set<Periodic>,
-        val unUnregister: Set<Periodic>)
+        val unDelete: Set<Entity>)
 
 /**
  * Auto generated key components for entities.
@@ -88,8 +76,6 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      * Local impulse table for resolution of external calls.
      */
     private val table = arrayListOf<(Any?) -> Unit>()
-
-    private val periodics = hashSetOf<Periodic>()
 
     /**
      * Local key table for key computation.
@@ -122,8 +108,6 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 assigns.set(hashMapOf())
                 creates.set(hashSetOf())
                 deletes.set(hashSetOf())
-                register.set(hashSetOf())
-                unregister.set(hashSetOf())
 
                 // Activate tracking
                 tracking.set(true)
@@ -135,7 +119,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 tracking.set(false)
 
                 // Return undo
-                return EntityUndo(assigns.get(), creates.get(), deletes.get(), register.get(), unregister.get())
+                return EntityUndo(assigns.get(), creates.get(), deletes.get())
             }
 
             override fun undo(time: Revision, carry: EntityUndo) {
@@ -151,16 +135,6 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
 
                 for (e in carry.unDelete)
                     container.registerEntity(e)
-
-                for (p in carry.unRegister) {
-                    container.unregisterPeriodic(p)
-                    periodics.remove(p)
-                }
-
-                for (p in carry.unUnregister) {
-                    container.restorePeriodic(p)
-                    periodics.add(p)
-                }
 
                 // Deactivate blind
                 blind.set(false)
@@ -237,15 +211,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             throw IllegalStateException("Deleting from non-tracking or blind area.")
 
         // Track delete and unregister if not blind
-        if (!blind.get()) {
+        if (!blind.get())
             deletes.get().add(this)
-            for (p in periodics)
-                unregister.get().add(p)
-        }
-
-        // Unregister all periodics
-        for (p in periodics)
-            container.unregisterPeriodic(p)
 
         // Execute and remove
         container.unregisterEntity(this)
@@ -414,75 +381,6 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                     if (x != null)
                         x.delete()
             }
-
-
-    private class Pulse<in R : Entity>(
-            val block: () -> Unit) : Delegate<R, PeriodicFunction> {
-        var periodic: Periodic? = null
-
-        override fun getValue(r: R, p: KProperty<*>) = periodicFunction({ delay, interval ->
-            println("Registering ${p.name}, $delay $interval at ${r.container.rev()}")
-
-            if (!tracking.get())
-                throw IllegalStateException("Cannot register periodic from outside impulse.")
-
-            // Do not register twice
-            if (periodic == null) {
-                // Register a new periodic
-                r.container.registerPeriodic(r.container.rev(), delay, interval, block).let {
-                    // Assign it for un-registration
-                    periodic = it
-
-                    // Add to local set of periodics for deletes.
-                    r.periodics.add(it)
-
-                    // Track registration
-                    register.get().add(it)
-                }
-            }
-        }, {
-            println("Unregistering ${p.name}, at ${r.container.rev()}")
-
-            if (!tracking.get())
-                throw IllegalStateException("Cannot unregister periodic from outside impulse.")
-
-            // Only apply if present
-            periodic?.let {
-                // Unregister the periodic
-                r.container.unregisterPeriodic(it)
-
-                // Remove from local set of periodics for deletes.
-                r.periodics.remove(it)
-
-                // Reset it
-                periodic = null
-
-                // Track un-registration
-                unregister.get().add(it)
-            }
-
-        })
-
-    }
-
-    protected fun <R : Entity> R.pulse(block: () -> Unit) = Provider { r: R, p ->
-        if (p is KMutableProperty<*>)
-            throw IllegalArgumentException("Pulses cannot be mutable fields.")
-
-        Pulse<R> {
-            if (tracking.get())
-                throw IllegalStateException("Pulse body called from a tracking method.")
-
-            // Activate blind mode, everyone shares the pulse so block is safe.
-            blind.set(true)
-
-            // Invoke block.
-            block()
-
-            // Reset tracking.
-            blind.set(false)
-        }
-    }
 
     /**
      * Creates a single entity container that can be nullable. On value change, non-contained entities will be

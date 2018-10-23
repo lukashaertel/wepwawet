@@ -124,7 +124,7 @@ class Root(container: Container) : Entity(container) {
         shotPower -= 10
     }
     val spawn by impulse { owner: Byte, start: Pos ->
-        create(::Player, owner, start).change()
+        create(::Player, owner, start)
     }
 }
 
@@ -185,13 +185,10 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
             delete()
     }
 
-    val changeColor by pulse {
+    val changeColor by impulse {->
         color = (color + 1) % 6
     }
 
-    val change by impulse { ->
-        changeColor.register(1000, 1000)
-    }
 
     val shoot by impulse { dx: Int, dy: Int ->
         all?.let {
