@@ -182,7 +182,7 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
     val damage by impulse { ->
         health -= 10
         if (health <= 0)
-            delete(this)
+            delete()
     }
 
     val changeColor by pulse {
@@ -218,7 +218,7 @@ class Bullet(container: Container, start: Long, owner: Byte, val pos: Pos, val v
     val owner by key(owner)
 
     val destroy by impulse { ->
-        delete(this)
+        delete()
     }
 
     val dt get() = (container.rev().asMs() - start) / 1000.0f

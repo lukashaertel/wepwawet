@@ -231,14 +231,14 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     /**
      * Deletes the entity.
      */
-    protected fun delete(entity: Entity) {
+    protected fun delete() {
         // Validate call location
         if (!tracking.get() && !blind.get())
             throw IllegalStateException("Deleting from non-tracking or blind area.")
 
         // Track delete and unregister if not blind
         if (!blind.get()) {
-            deletes.get().add(entity)
+            deletes.get().add(this)
             for (p in periodics)
                 unregister.get().add(p)
         }
@@ -248,7 +248,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             container.unregisterPeriodic(p)
 
         // Execute and remove
-        container.unregisterEntity(entity)
+        container.unregisterEntity(this)
     }
 
     /**
@@ -412,7 +412,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 delta(x, y)
                 if (!blind.get())
                     if (x != null)
-                        delete(x)
+                        x.delete()
             }
 
 
@@ -505,7 +505,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             prop(initial) { x, y ->
                 delta(x, y)
                 if (!blind.get())
-                    delete(x)
+                    x.delete()
             }
 
     /**
@@ -530,7 +530,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 if (!blind.get())
                     for (x in xs)
                         if (x !in ys)
-                            delete(x)
+                            x.delete()
             }
 
     /**
