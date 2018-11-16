@@ -26,36 +26,9 @@ import ktx.scene2d.button
 import ktx.scene2d.label
 import org.jgroups.Global
 import org.jgroups.Message
-import java.io.DataInputStream
-import java.io.File
-import java.io.FileInputStream
+import java.io.*
 import kotlin.properties.Delegates.notNull
 
-/**
- * Transferred call.
- */
-@Serializable
-data class Call(val time: Time,
-                val inner: Inner,
-                val author: Author,
-                val ids: List<Any?>,
-                val method: Method,
-                val arg: Any?)
-
-/**
- * History of all calls.
- */
-@Serializable
-data class History(val calls: List<Call>)
-
-/**
- * Variable storing the history of the game.
- */
-var history = History(listOf())
-
-fun Container.receive(call: Call) {
-    receive(Revision(call.time, call.inner, call.author), call.ids, call.method, call.arg)
-}
 
 /**
  * Something that's drawable.
@@ -85,11 +58,6 @@ interface Frequent : Periodic
  * Called every second.
  */
 interface Sometimes : Periodic
-
-/**
- * Get the time of the revision in ms.
- */
-fun Revision.asMs() = time
 
 
 /**
@@ -251,19 +219,45 @@ class Main(game: Game) : StageScreen<Game>(game) {
         }
     }
 
-    val author = game.identity
+    /**
+     * Author, as initialized by the games settings.
+     */
+    private val author = game.identity
 
-    var load: File? = null
+    /**
+     * History of this game screen.
+     */
+    private var history = History(listOf())
 
+    /**
+     * Coder for the serializable classes.
+     */
     private var coder by notNull<BindingCoder>()
 
+    /**
+     * Transport channel.
+     */
     private var channel by notNull<BindingChannel>()
 
+    /**
+     * Connector.
+     */
     private var container by notNull<Container>()
 
-    private var ex by notNull<Root>()
+    /**
+     * Root entity of the screen.
+     */
+    private var root by notNull<Root>()
 
-    //private val autosaveStream = DataOutputStream(FileOutputStream(File.createTempFile("autosave_", ".stream", File("saves"))))
+    /**
+     * Stream to save to.
+     */
+    private val autosaveStream = DataOutputStream(FileOutputStream(File.createTempFile("autosave_", ".stream", File("saves"))))
+
+    /**
+     * If given at boot, will load a previous stream.
+     */
+    var load: File? = null
 
     override fun show() {
         // Get coder.
@@ -276,11 +270,12 @@ class Main(game: Game) : StageScreen<Game>(game) {
         channel.discardOwnMessages = true
 
 
+        // Initialize container on the given author, dispatching to the channel.
         container = object : Container(author) {
             override fun dispatch(time: Revision, id: List<Any?>, method: Method, arg: Any?) {
                 synchronized(container) {
                     val message = Call(time.time, time.inner, time.author, id, method, arg)
-                    //coder.encode(autosaveStream, message)
+                    coder.encode(autosaveStream, message)
 
                     history = history.copy(history.calls + message)
                     channel.send(null, message)
@@ -288,6 +283,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
             }
         }
 
+        // Connect network to container.
         channel.valueReceiver = object : ValueReceiver {
             override fun receive(source: Message, message: Any?) {
                 when (message) {
@@ -315,12 +311,17 @@ class Main(game: Game) : StageScreen<Game>(game) {
             }
         }
 
-        channel.connect("Chat cluster")
+        // Join cluster
+        channel.connect("Cluster")
 
-        ex = container.init(::Root)
+        // Reset history and entity.
+        history = History(listOf())
+        root = container.init(::Root)
 
+        // Trigger getting the game state.
         channel.getState(null, 10000)
 
+        // If load file given, load into container.
         if (load != null && load!!.exists()) {
             val stream = DataInputStream(FileInputStream(load))
             synchronized(container) {
@@ -338,8 +339,6 @@ class Main(game: Game) : StageScreen<Game>(game) {
         channel.close()
     }
 
-    var randomly = false
-
 
     val mine get() = container.findAuto<Player>(author)
 
@@ -351,17 +350,17 @@ class Main(game: Game) : StageScreen<Game>(game) {
             container.revise(System.currentTimeMillis())
 
             if (mine == null && Gdx.input.isKeyJustPressed(Input.Keys.B)) {
-                ex.spawn(author, Pos((Math.random() * 300).toInt(), (Math.random() * 300).toInt()))
+                root.spawn(author, Pos((Math.random() * 300).toInt(), (Math.random() * 300).toInt()))
             }
 
             mine?.let {
-                if (Gdx.input.isKeyPressed(Input.Keys.A) || (randomly && randomTrue(.5)))
+                if (Gdx.input.isKeyPressed(Input.Keys.A))
                     it.left()
-                if (Gdx.input.isKeyPressed(Input.Keys.D) || (randomly && randomTrue(.5)))
+                if (Gdx.input.isKeyPressed(Input.Keys.D))
                     it.right()
-                if (Gdx.input.isKeyPressed(Input.Keys.W) || (randomly && randomTrue(.5)))
+                if (Gdx.input.isKeyPressed(Input.Keys.W))
                     it.up()
-                if (Gdx.input.isKeyPressed(Input.Keys.S) || (randomly && randomTrue(.5)))
+                if (Gdx.input.isKeyPressed(Input.Keys.S))
                     it.down()
 
                 val nowDown = Gdx.input.isButtonPressed(Input.Buttons.LEFT)
@@ -382,7 +381,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
             override fun draw(batch: Batch, parentAlpha: Float) {
                 synchronized(container) {
-                    for (i in 0..(ex.shotPower / 10)) {
+                    for (i in 0..(this@Main.root.shotPower / 10)) {
                         batch.color = Color.GREEN
                         batch.draw(white, (i * 15).toFloat(), 0f, 5f, 5f)
                     }
@@ -408,20 +407,6 @@ class Main(game: Game) : StageScreen<Game>(game) {
                             e.call()
                         if (csom && e is Sometimes)
                             e.call()
-                    }
-                }
-            }
-        }
-        this + dropLeft {
-            button {
-                val l = label("Play randomly")
-                onClick {
-                    if (!randomly) {
-                        l.setText("Stop")
-                        randomly = true
-                    } else {
-                        l.setText("Play randomly")
-                        randomly = false
                     }
                 }
             }
