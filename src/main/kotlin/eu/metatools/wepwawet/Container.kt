@@ -14,7 +14,7 @@ private data class ContainerUndo(
 /**
  * Exchange manager and change tracker.
  */
-abstract class Container(val author: Byte) {
+abstract class Container(val author: Author) {
     companion object {
         val MATCH_ANY = Any()
     }
@@ -22,22 +22,22 @@ abstract class Container(val author: Byte) {
     /**
      * Substitute outer time.
      */
-    private var subTime: Long? = null
+    private var subTime: Time? = null
 
     /**
      * Substitute inner time.
      */
-    private var subInner: Short? = null
+    private var subInner: Inner? = null
 
     /**
      * Substitute author.
      */
-    private var subAuthor: Byte? = null
+    private var subAuthor: Author? = null
 
     /**
      * Run block in substituted time.
      */
-    private inline fun <T> subIn(time: Long?, inner: Short?, author: Byte?, block: () -> T): T {
+    private inline fun <T> subIn(time: Time?, inner: Inner?, author: Author?, block: () -> T): T {
         val prevSubTime = subTime
         val prevSubInner = subInner
         val prevSubAuthor = subAuthor
@@ -56,17 +56,17 @@ abstract class Container(val author: Byte) {
     /**
      * Backing for the current insert time.
      */
-    private var timeBacking: Long = 0
+    private var timeBacking: Time = 0
 
     /**
      * Backing for the inner insert time.
      */
-    private var innerBacking: Short = 0
+    private var innerBacking: Inner = 0
 
     /**
      * Calculates the next open inner revision time for the given [time].
      */
-    internal fun openInner(time: Long): Short {
+    internal fun openInner(time: Time): Short {
         // Get revision sub set for the time region
         val area = repo.revisions.subSet(
                 Revision(time, Short.MIN_VALUE, author),
@@ -89,7 +89,7 @@ abstract class Container(val author: Byte) {
     /**
      * Calculates the next open revision for the given [time].
      */
-    internal fun openTime(time: Long) =
+    internal fun openTime(time: Time) =
             Revision(time, openInner(time), author)
 
     /**
@@ -122,7 +122,9 @@ abstract class Container(val author: Byte) {
     /**
      * Repository for change rollback.
      */
-    internal val repo = Repo<Revision>().also { it.softUpper = Revision(0, Short.MAX_VALUE, Byte.MAX_VALUE) }
+    internal val repo = Repo<Revision>().also {
+        it.softUpper = Revision(0, Inner.MAX_VALUE, Author.MAX_VALUE)
+    }
 
     /**
      * Map of primary key to entities.
@@ -207,14 +209,14 @@ abstract class Container(val author: Byte) {
     }
 
     /**
-     * Dispatches the [call] on [id] with argument [arg].
+     * Dispatches the [method] on [id] with argument [arg].
      */
-    abstract fun dispatch(time: Revision, id: List<Any?>, call: Byte, arg: Any?)
+    abstract fun dispatch(time: Revision, id: List<Any?>, method: Method, arg: Any?)
 
     /**
-     * Handles an external [call] on [id] with argument [arg].
+     * Handles an external [method] on [id] with argument [arg].
      */
-    fun receive(time: Revision, id: List<Any?>, call: Byte, arg: Any?) {
+    fun receive(time: Revision, id: List<Any?>, method: Method, arg: Any?) {
         // Insert into repository
         repo.insert(object : Action<Revision, ContainerUndo?> {
             override fun exec(time: Revision): ContainerUndo? {
@@ -226,7 +228,7 @@ abstract class Container(val author: Byte) {
                         null
                     } else {
                         // Otherwise execute nested action and return composed undo
-                        val nestedAction = target.runAction(call, arg)
+                        val nestedAction = target.runAction(method, arg)
                         val nestedUndo = nestedAction.exec(time)
                         ContainerUndo(target, nestedAction, nestedUndo)
                     }
@@ -243,7 +245,7 @@ abstract class Container(val author: Byte) {
                 }
             }
 
-            override fun toString() = "$id.$call($arg)"
+            override fun toString() = "$id.$method($arg)"
         }, time)
     }
 
@@ -258,7 +260,7 @@ abstract class Container(val author: Byte) {
 
     fun revise(targetTime: Long) {
         time = targetTime
-        repo.softUpper = Revision(targetTime, Short.MAX_VALUE, Byte.MAX_VALUE)
+        repo.softUpper = Revision(targetTime, Inner.MAX_VALUE, Author.MAX_VALUE)
     }
 }
 

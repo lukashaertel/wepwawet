@@ -18,10 +18,7 @@ import eu.metatools.voronois.tools.StageScreen
 import eu.metatools.voronois.tools.dropLeft
 import eu.metatools.voronois.tools.dropRight
 import eu.metatools.voronois.tools.popScreen
-import eu.metatools.wepwawet.Container
-import eu.metatools.wepwawet.Entity
-import eu.metatools.wepwawet.Revision
-import eu.metatools.wepwawet.findAuto
+import eu.metatools.wepwawet.*
 import kotlinx.serialization.Serializable
 import ktx.actors.onClick
 import ktx.actors.plus
@@ -38,11 +35,11 @@ import kotlin.properties.Delegates.notNull
  * Transferred call.
  */
 @Serializable
-data class Call(val time: Long,
-                val inner: Short,
-                val author: Byte,
+data class Call(val time: Time,
+                val inner: Inner,
+                val author: Author,
                 val ids: List<Any?>,
-                val call: Byte,
+                val method: Method,
                 val arg: Any?)
 
 /**
@@ -57,7 +54,7 @@ data class History(val calls: List<Call>)
 var history = History(listOf())
 
 fun Container.receive(call: Call) {
-    receive(Revision(call.time, call.inner, call.author), call.ids, call.call, call.arg)
+    receive(Revision(call.time, call.inner, call.author), call.ids, call.method, call.arg)
 }
 
 /**
@@ -123,7 +120,7 @@ class Root(container: Container) : Entity(container) {
     val deplete by impulse { ->
         shotPower -= 10
     }
-    val spawn by impulse { owner: Byte, start: Pos ->
+    val spawn by impulse { owner: Author, start: Pos ->
         create(::Player, owner, start)
     }
 }
@@ -131,7 +128,7 @@ class Root(container: Container) : Entity(container) {
 /**
  * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
  */
-class Player(container: Container, owner: Byte, start: Pos) : Entity(container), Drawable, Frequent {
+class Player(container: Container, owner: Author, start: Pos) : Entity(container), Drawable, Frequent {
     val all get() = container.findAuto<Root>()
 
     override fun call() {
@@ -185,7 +182,7 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
             delete()
     }
 
-    val changeColor by impulse {->
+    val changeColor by impulse { ->
         color = (color + 1) % 6
     }
 
@@ -209,7 +206,7 @@ class Player(container: Container, owner: Byte, start: Pos) : Entity(container),
 /**
  * A bullet, hit tests with non-owner player in every frame.
  */
-class Bullet(container: Container, start: Long, owner: Byte, val pos: Pos, val vel: Pos) : Entity(container), Drawable, Always {
+class Bullet(container: Container, start: Long, owner: Author, val pos: Pos, val vel: Pos) : Entity(container), Drawable, Always {
     val start by key(start)
 
     val owner by key(owner)
@@ -254,7 +251,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
         }
     }
 
-    var author: Byte = 0
+    val author = Author.random()
 
     var load: File? = null
 
@@ -278,10 +275,11 @@ class Main(game: Game) : StageScreen<Game>(game) {
         channel = BindingChannel(Global.DEFAULT_PROTOCOL_STACK, coder)
         channel.discardOwnMessages = true
 
+
         container = object : Container(author) {
-            override fun dispatch(time: Revision, id: List<Any?>, call: Byte, arg: Any?) {
+            override fun dispatch(time: Revision, id: List<Any?>, method: Method, arg: Any?) {
                 synchronized(container) {
-                    val message = Call(time.time, time.inner, time.author, id, call, arg)
+                    val message = Call(time.time, time.inner, time.author, id, method, arg)
                     //coder.encode(autosaveStream, message)
 
                     history = history.copy(history.calls + message)

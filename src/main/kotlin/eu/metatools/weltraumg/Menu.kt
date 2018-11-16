@@ -43,26 +43,9 @@ class Menu(game: Game) : StageScreen<Game>(game) {
 
         this + dropLeft {
             button {
-                label = label("New game as ${main.author}")
+                label = label("Start")
                 onClick {
                     pushScreen(main)
-                }
-            }
-
-
-            button {
-                label("+")
-                onClick {
-                    main.author++
-                    label.setText("New game as ${main.author}")
-                }
-            }
-
-            button {
-                label("-")
-                onClick {
-                    main.author--
-                    label.setText("New game as ${main.author}")
                 }
             }
         }

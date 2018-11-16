@@ -11,9 +11,9 @@ import kotlin.reflect.KProperty
 private data class Box<out T>(val value: T)
 
 /**
- * Shared blind state. If this is true, blind is active.
+ * Shared undoing state. If this is true, undoing is active.
  */
-private val blind = ThreadLocal.withInitial { false }
+private val undoing = ThreadLocal.withInitial { false }
 
 /**
  * Shared tracking state. If this is true, tracking is active.
@@ -97,9 +97,9 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     internal fun primaryKey() = keys.map { it() }
 
     /**
-     * Computes the run action for the call to [call] on argument [arg].
+     * Computes the run action for the call to [method] on argument [arg].
      */
-    internal fun runAction(call: Byte, arg: Any?): Action<Revision, *> {
+    internal fun runAction(method: Method, arg: Any?): Action<Revision, *> {
         return object : Action<Revision, EntityUndo> {
             override fun exec(time: Revision): EntityUndo {
                 // Clear tracker
@@ -111,7 +111,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 tracking.set(true)
 
                 // Call block
-                table[call.toInt()](arg)
+                table[method.toInt()](arg)
 
                 // Deactivate tracking
                 tracking.set(false)
@@ -121,8 +121,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             }
 
             override fun undo(time: Revision, carry: EntityUndo) {
-                // Activate blind
-                blind.set(true)
+                // Activate undoing
+                undoing.set(true)
 
                 for ((k, v) in carry.unAssign)
                     @Suppress("unchecked_cast")
@@ -134,8 +134,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 for (e in carry.unDelete)
                     container.registerEntity(e)
 
-                // Deactivate blind
-                blind.set(false)
+                // Deactivate undoing
+                undoing.set(false)
             }
         }
     }
@@ -145,11 +145,11 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     private fun trackSet(property: KMutableProperty1<Entity, Any?>) {
         // Check tracking validity
-        if (!tracking.get() && !blind.get())
-            throw IllegalStateException("Setting from non-tracking or blind area.")
+        if (!tracking.get() && !undoing.get())
+            throw IllegalStateException("Setting from non-tracking or undoing area.")
 
         // Put previous value, without overwriting.
-        if (!blind.get())
+        if (!undoing.get())
             assigns.get().computeIfAbsent(BoundProperty(this, property)) { Box(property.get(this)) }
     }
 
@@ -158,15 +158,15 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     protected fun <E : Entity> create(constructor: (Container) -> E): E {
         // Validate call location
-        if (!tracking.get() && !blind.get())
-            throw IllegalStateException("Creating from non-tracking or blind area.")
+        if (!tracking.get() && !undoing.get())
+            throw IllegalStateException("Creating from non-tracking or undoing area.")
 
         // Execute and add to container
         val e = constructor(container)
         container.registerEntity(e)
 
-        // Track create if not blind
-        if (!blind.get())
+        // Track create if not undoing
+        if (!undoing.get())
             creates.get().add(e)
 
         return e
@@ -205,11 +205,11 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      */
     protected fun delete() {
         // Validate call location
-        if (!tracking.get() && !blind.get())
-            throw IllegalStateException("Deleting from non-tracking or blind area.")
+        if (!tracking.get() && !undoing.get())
+            throw IllegalStateException("Deleting from non-tracking or undoing area.")
 
-        // Track delete and unregister if not blind
-        if (!blind.get())
+        // Track delete and unregister if not undoing
+        if (!undoing.get())
             deletes.get().add(this)
 
         // Execute and remove
@@ -340,7 +340,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     protected fun <T : Entity> holdOptional(initial: T? = null, delta: (T?, T?) -> Unit = { _, _ -> }) =
             prop(initial) { x, y ->
                 delta(x, y)
-                if (!blind.get())
+                if (!undoing.get())
                     if (x != null)
                         x.delete()
             }
@@ -351,7 +351,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     protected fun <T : Entity> holdOne(initial: T, delta: (T, T) -> Unit = { _, _ -> }) =
             prop(initial) { x, y ->
                 delta(x, y)
-                if (!blind.get())
+                if (!undoing.get())
                     x.delete()
             }
 
@@ -362,7 +362,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
     protected fun <T : Entity> holdMany(initial: List<T> = listOf(), delta: (List<T>, List<T>) -> Unit = { _, _ -> }) =
             prop(initial) { xs, ys ->
                 delta(xs, ys)
-                if (!blind.get())
+                if (!undoing.get())
                     for (x in xs)
                         if (x !in ys)
                             x.delete()
@@ -372,7 +372,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      * An impulse without arguments.
      */
     private class Impulse0<in R : Entity>(
-            val call: Byte,
+            val method: Method,
             val block: R.() -> Unit) : Delegate<R, () -> Unit> {
         override fun getValue(r: R, p: KProperty<*>) = { ->
             // Check that key is present
@@ -385,8 +385,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             if (tracking.get())
                 r.block()
             else {
-                r.container.receive(r.container.rev(), key, call, Unit)
-                r.container.dispatch(r.container.rev(), key, call, Unit)
+                r.container.receive(r.container.rev(), key, method, Unit)
+                r.container.dispatch(r.container.rev(), key, method, Unit)
                 r.container.incInner()
             }
         }
@@ -405,14 +405,14 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             block()
         }
 
-        Impulse0((r.table.size - 1).toByte(), block)
+        Impulse0((r.table.size - 1).toMethod(), block)
     }
 
     /**
      * An impulse with one argument. Entity arguments will be dispatched via their [primaryKey].
      */
     private class Impulse1<in R : Entity, A>(
-            val call: Byte,
+            val method: Method,
             val block: R.(A) -> Unit) : Delegate<R, (A) -> Unit> {
         override fun getValue(r: R, p: KProperty<*>) = { arg: A ->
             // Check that key is present
@@ -426,8 +426,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 r.block(arg)
             else {
                 val parg = r.tryToProxy(arg)
-                r.container.receive(r.container.rev(), key, call, parg)
-                r.container.dispatch(r.container.rev(), key, call, parg)
+                r.container.receive(r.container.rev(), key, method, parg)
+                r.container.dispatch(r.container.rev(), key, method, parg)
                 r.container.incInner()
             }
         }
@@ -446,14 +446,14 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             block(tryFromProxy(parg) as A)
         }
 
-        Impulse1((r.table.size - 1).toByte(), block)
+        Impulse1((r.table.size - 1).toMethod(), block)
     }
 
     /**
      * An impulse with two arguments. Entity arguments will be dispatched via their [primaryKey].
      */
     private class Impulse2<in R : Entity, A1, A2>(
-            val call: Byte,
+            val method: Method,
             val block: R.(A1, A2) -> Unit) : Delegate<R, (A1, A2) -> Unit> {
         override fun getValue(r: R, p: KProperty<*>) = { a1: A1, a2: A2 ->
             // Check that key is present
@@ -467,8 +467,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 r.block(a1, a2)
             else {
                 val parg = listOf(r.tryToProxy(a1), r.tryToProxy(a2))
-                r.container.receive(r.container.rev(), key, call, parg)
-                r.container.dispatch(r.container.rev(), key, call, parg)
+                r.container.receive(r.container.rev(), key, method, parg)
+                r.container.dispatch(r.container.rev(), key, method, parg)
                 r.container.incInner()
             }
         }
@@ -488,7 +488,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             block(tryFromProxy(a1) as A1, tryFromProxy(a2) as A2)
         }
 
-        Impulse2((r.table.size - 1).toByte(), block)
+        Impulse2((r.table.size - 1).toMethod(), block)
     }
 
 
@@ -496,7 +496,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      * An impulse with three arguments. Entity arguments will be dispatched via their [primaryKey].
      */
     private class Impulse3<in R : Entity, A1, A2, A3>(
-            val call: Byte,
+            val method: Method,
             val block: R.(A1, A2, A3) -> Unit) : Delegate<R, (A1, A2, A3) -> Unit> {
         override fun getValue(r: R, p: KProperty<*>) = { a1: A1, a2: A2, a3: A3 ->
             // Check that key is present
@@ -510,8 +510,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 r.block(a1, a2, a3)
             else {
                 val parg = listOf(r.tryToProxy(a1), r.tryToProxy(a2), r.tryToProxy(a3))
-                r.container.receive(r.container.rev(), key, call, parg)
-                r.container.dispatch(r.container.rev(), key, call, parg)
+                r.container.receive(r.container.rev(), key, method, parg)
+                r.container.dispatch(r.container.rev(), key, method, parg)
                 r.container.incInner()
             }
         }
@@ -531,7 +531,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             block(tryFromProxy(a1) as A1, tryFromProxy(a2) as A2, tryFromProxy(a3) as A3)
         }
 
-        Impulse3((r.table.size - 1).toByte(), block)
+        Impulse3((r.table.size - 1).toMethod(), block)
     }
 
 
@@ -539,7 +539,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
      * An impulse with four arguments. Entity arguments will be dispatched via their [primaryKey].
      */
     private class Impulse4<in R : Entity, A1, A2, A3, A4>(
-            val call: Byte,
+            val method: Method,
             val block: R.(A1, A2, A3, A4) -> Unit) : Delegate<R, (A1, A2, A3, A4) -> Unit> {
         override fun getValue(r: R, p: KProperty<*>) = { a1: A1, a2: A2, a3: A3, a4: A4 ->
             // Check that key is present
@@ -553,8 +553,8 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
                 r.block(a1, a2, a3, a4)
             else {
                 val parg = listOf(r.tryToProxy(a1), r.tryToProxy(a2), r.tryToProxy(a3), r.tryToProxy(a4))
-                r.container.receive(r.container.rev(), key, call, parg)
-                r.container.dispatch(r.container.rev(), key, call, parg)
+                r.container.receive(r.container.rev(), key, method, parg)
+                r.container.dispatch(r.container.rev(), key, method, parg)
                 r.container.incInner()
             }
         }
@@ -574,7 +574,7 @@ abstract class Entity(val container: Container, val autoKeyMode: AutoKeyMode = A
             block(tryFromProxy(a1) as A1, tryFromProxy(a2) as A2, tryFromProxy(a3) as A3, tryFromProxy(a4) as A4)
         }
 
-        Impulse4((r.table.size - 1).toByte(), block)
+        Impulse4((r.table.size - 1).toMethod(), block)
     }
 
 }
