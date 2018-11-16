@@ -6,6 +6,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport
 import eu.metatools.voronois.data.Settings
 import eu.metatools.voronois.tools.ExGame
 import eu.metatools.voronois.tools.localFile
+import eu.metatools.wepwawet.Author
 import kotlinx.serialization.json.JSON
 import ktx.async.assets.AssetStorage
 import ktx.async.enableKtxCoroutines
@@ -22,12 +23,12 @@ class Game : ExGame<Game>() {
 
     var storage by Delegates.notNull<AssetStorage>()
 
-    var identity by localFile("uuid", UUID::randomUUID) {
+    var identity by localFile("author", { Author.random() }) {
         read {
-            UUID.fromString(readString("utf-8"))
+            Author.fromUUID(UUID.fromString(readString("utf-8")))
         }
         write {
-            writeString(it.toString(), false, "utf-8")
+            writeString(it.toUUID().toString(), false, "utf-8")
         }
     }
 

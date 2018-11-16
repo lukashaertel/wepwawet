@@ -251,7 +251,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
         }
     }
 
-    val author = Author.random()
+    val author = game.identity
 
     var load: File? = null
 
