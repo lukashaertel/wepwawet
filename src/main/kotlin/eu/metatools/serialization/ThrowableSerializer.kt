@@ -1,7 +1,7 @@
 package eu.metatools.serialization
 
-import com.sun.xml.internal.messaging.saaj.util.ByteInputStream
 import kotlinx.serialization.*
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
@@ -28,7 +28,7 @@ object ThrowableSerializer : KSerializer<Throwable> {
         val length = input.readIntValue()
         val bytes = ByteArray(length) { input.readByteValue() }
 
-        return ObjectInputStream(ByteInputStream(bytes, length)).readObject() as Throwable
+        return ObjectInputStream(ByteArrayInputStream(bytes, 0, length)).readObject() as Throwable
     }
 
     override fun save(output: KOutput, obj: Throwable) {

@@ -85,34 +85,6 @@ data class Applier(val forces: TreeMap<Time, R>) : Sim {
 
     override fun a(t: Time) = forces.floorEntry(t)?.value ?: 0.0
 
-//
-//    private  fun s(t: Time): R {
-//        val lower = forces.lowerEntry(t)
-//        if (lower == null)
-//            return carryS
-//
-//        val dt = t - lower.key
-//        return s(lower.key, dt * dt * lower.value + carryS)
-//    }
-//
-//    private  fun v(t: Time, carryS: R, carryV: R): R {
-//        val lower = forces.lowerEntry(t)
-//        if (lower == null)
-//            return carryS
-//
-//        val dt = t - lower.key
-//        return v(lower.key, dt * lower.value + carryS)
-//    }
-//
-//    override fun s(t: Time) {
-//
-//    }
-//
-//    override fun v(t: Time) {}
-//
-//    override fun a(t: Time) = forces.floorEntry(t)?.value ?: 0.0
-
-
     fun consolidate(t: Time) {
         forces[t] = a(t)
         forces.headMap(t, false).clear()
