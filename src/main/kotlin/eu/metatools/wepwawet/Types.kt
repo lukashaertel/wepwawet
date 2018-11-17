@@ -5,15 +5,15 @@ import kotlinx.serialization.Serializable
 import java.util.*
 
 /**
- * Type of time.
+ * Type of timestep.
  */
-typealias Time = Long
+typealias Timestep = Long
 
 fun Int.toTime() = toByte()
 fun Long.toTime() = toByte()
 
 /**
- * Type of intra-time.
+ * Type of intra-timestep.
  */
 typealias Inner = Short
 

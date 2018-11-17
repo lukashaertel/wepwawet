@@ -20,12 +20,12 @@ abstract class Container(val author: Author) {
     }
 
     /**
-     * Substitute outer time.
+     * Substitute outer timestep.
      */
-    private var subTime: Time? = null
+    private var subTimestep: Timestep? = null
 
     /**
-     * Substitute inner time.
+     * Substitute inner timestep.
      */
     private var subInner: Inner? = null
 
@@ -35,42 +35,42 @@ abstract class Container(val author: Author) {
     private var subAuthor: Author? = null
 
     /**
-     * Run block in substituted time.
+     * Run block in substituted timestep.
      */
-    private inline fun <T> subIn(time: Time?, inner: Inner?, author: Author?, block: () -> T): T {
-        val prevSubTime = subTime
+    private inline fun <T> subIn(timestep: Timestep?, inner: Inner?, author: Author?, block: () -> T): T {
+        val prevSubTime = subTimestep
         val prevSubInner = subInner
         val prevSubAuthor = subAuthor
-        subTime = time
+        subTimestep = timestep
         subInner = inner
         subAuthor = author
 
         val r = block()
 
-        subTime = prevSubTime
+        subTimestep = prevSubTime
         subInner = prevSubInner
         subAuthor = prevSubAuthor
         return r
     }
 
     /**
-     * Backing for the current insert time.
+     * Backing for the current insert timestep.
      */
-    private var timeBacking: Time = 0
+    private var timestepBacking: Timestep = 0
 
     /**
-     * Backing for the inner insert time.
+     * Backing for the inner insert timestep.
      */
     private var innerBacking: Inner = 0
 
     /**
-     * Calculates the next open inner revision time for the given [time].
+     * Calculates the next open inner revision timestep for the given [timestep].
      */
-    internal fun openInner(time: Time): Short {
-        // Get revision sub set for the time region
+    internal fun openInner(timestep: Timestep): Short {
+        // Get revision sub set for the timestep region
         val area = repo.revisions.subSet(
-                Revision(time, Short.MIN_VALUE, author),
-                Revision(time, Short.MAX_VALUE, author))
+                Revision(timestep, Short.MIN_VALUE, author),
+                Revision(timestep, Short.MAX_VALUE, author))
 
         if (area.isEmpty())
             return 0
@@ -87,18 +87,18 @@ abstract class Container(val author: Author) {
     }
 
     /**
-     * Calculates the next open revision for the given [time].
+     * Calculates the next open revision for the given [timestep].
      */
-    internal fun openTime(time: Time) =
-            Revision(time, openInner(time), author)
+    internal fun openTime(timestep: Timestep) =
+            Revision(timestep, openInner(timestep), author)
 
     /**
-     * Current insert time.
+     * Current insert timestep.
      */
     var time
-        get() = timeBacking
+        get() = timestepBacking
         set(value) {
-            timeBacking = value
+            timestepBacking = value
             innerBacking = openInner(value)
         }
 
@@ -112,11 +112,11 @@ abstract class Container(val author: Author) {
     }
 
     /**
-     * Computes a new [Revision] object representing the current time and authorship (may be substituted during an
+     * Computes a new [Revision] object representing the current timestep and authorship (may be substituted during an
      * execution).
      */
     fun rev() =
-            Revision(subTime ?: timeBacking, subInner ?: innerBacking, subAuthor ?: author)
+            Revision(subTimestep ?: timestepBacking, subInner ?: innerBacking, subAuthor ?: author)
 
 
     /**
@@ -220,7 +220,7 @@ abstract class Container(val author: Author) {
         // Insert into repository
         repo.insert(object : Action<Revision, ContainerUndo?> {
             override fun exec(time: Revision): ContainerUndo? {
-                return subIn(time.time, time.inner, time.author) {
+                return subIn(time.timestep, time.inner, time.author) {
                     // Resolve entity, if not present, don't do anything
                     val target = find(id)
 
@@ -236,7 +236,7 @@ abstract class Container(val author: Author) {
             }
 
             override fun undo(time: Revision, carry: ContainerUndo?) {
-                subIn(time.time, time.inner, time.author) {
+                subIn(time.timestep, time.inner, time.author) {
                     // If Exec was successful, undo
                     if (carry != null) {
                         @Suppress("unchecked_cast")

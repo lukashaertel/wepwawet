@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
  * Transferred call.
  */
 @Serializable
-data class Call(val time: Time,
+data class Call(val `timestep `: Timestep,
                 val inner: Inner,
                 val author: Author,
                 val ids: List<Any?>,
@@ -25,10 +25,10 @@ data class History(val calls: List<Call>)
  * Receives the call in the container.
  */
 fun Container.receive(call: Call) {
-    receive(Revision(call.time, call.inner, call.author), call.ids, call.method, call.arg)
+    receive(Revision(call.`timestep `, call.inner, call.author), call.ids, call.method, call.arg)
 }
 
 /**
- * Get the time of the revision in ms.
+ * Get the time of the revision in s.
  */
-fun Revision.asMs() = time
+fun Container.seconds() = rev().timestep.toDouble() / 1000.0

@@ -6,20 +6,18 @@ import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Batch
-import com.badlogic.gdx.math.Vector2
+import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
-import eu.metatools.common.randomTrue
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
 import eu.metatools.net.jgroups.ValueReceiver
 import eu.metatools.voronois.tools.StageScreen
-import eu.metatools.voronois.tools.dropLeft
 import eu.metatools.voronois.tools.dropRight
 import eu.metatools.voronois.tools.popScreen
+import eu.metatools.weltraumg.data.Applier
 import eu.metatools.wepwawet.*
-import kotlinx.serialization.Serializable
 import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.scene2d.button
@@ -27,6 +25,8 @@ import ktx.scene2d.label
 import org.jgroups.Global
 import org.jgroups.Message
 import java.io.*
+import java.lang.Math.*
+import java.util.*
 import kotlin.properties.Delegates.notNull
 
 
@@ -59,154 +59,83 @@ interface Frequent : Periodic
  */
 interface Sometimes : Periodic
 
-
-/**
- * Integer-position.
- */
-@Serializable
-data class Pos(val x: Int, val y: Int) {
-    companion object {
-        val left = Pos(-1, 0)
-        val right = Pos(1, 0)
-        val up = Pos(0, 1)
-        val down = Pos(0, -1)
-    }
-
-    operator fun plus(other: Pos) = Pos(x + other.x, y + other.y)
-}
-
 /**
  * Root object of the game.
  */
 class Root(container: Container) : Entity(container) {
-    var shotPower by prop(0)
-
-    val restock by impulse { ->
-        if (shotPower < 100)
-            shotPower += 1
-    }
-    val deplete by impulse { ->
-        shotPower -= 10
-    }
-    val spawn by impulse { owner: Author, start: Pos ->
-        create(::Player, owner, start)
+    val spawn by impulse { owner: Author ->
+        create(::Player, owner)
     }
 }
 
 /**
  * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
  */
-class Player(container: Container, owner: Author, start: Pos) : Entity(container), Drawable, Frequent {
+class Player(container: Container, owner: Author) : Entity(container), Drawable {
+    companion object {
+        val texture by lazy { TextureRegion(Texture("rarr.png")) }
+    }
+
     val all get() = container.findAuto<Root>()
 
-    override fun call() {
-        all?.let {
-            if (owner == container.author)
-                it.restock()
-        }
-    }
 
     override fun draw(batch: Batch, parentAlpha: Float) {
-        val src = when (color) {
-            0 -> Color.RED
-            1 -> Color.YELLOW
-            2 -> Color.GREEN
-            3 -> Color.CYAN
-            4 -> Color.BLUE
-            else -> Color.PURPLE
-        }
-        batch.color = Color.RED.cpy().lerp(src, health.toFloat() / 100f)
-
-        batch.draw(Main.white, pos.x.toFloat() - 10f, pos.y.toFloat() - 10f, 20f, 20f)
+        batch.draw(texture,
+                x.s(container.seconds()).toFloat(),
+                y.s(container.seconds()).toFloat(),
+                texture.regionWidth / 2.0f, texture.regionHeight / 2.0f,
+                texture.regionWidth.toFloat(), texture.regionHeight.toFloat(),
+                1.0f, 1.0f,
+                r.s(container.seconds()).toFloat())
     }
 
     val owner by key(owner)
 
-    var pos by prop(start)
+    var x by prop(Applier())
+    var y by prop(Applier())
+    var r by prop(Applier())
 
-    var health by prop(100)
-
-    var color by prop(0)
 
     val right by impulse { ->
-        pos += Pos.right
+        val time = container.seconds()
+        r.forces[time] = -raccell
     }
-
+    val raccell = 40.0
+    val accell = 30.0
     val left by impulse { ->
-        pos += Pos.left
+        val time = container.seconds()
+
+        r.forces[time] = raccell
+    }
+    val stopR by impulse { ->
+        val time = container.seconds()
+        r.forces[time] = 0.0
     }
 
-    val up by impulse { ->
-        pos += Pos.up
+    val fwd by impulse { ->
+        println("fwd")
+        val time = container.seconds()
+        val rotation = r.s(time)
+        val fx = cos(toRadians(rotation)) * accell
+        val fy = sin(toRadians(rotation)) * accell
+        x.forces[time] = fx
+        y.forces[time] = fy
     }
 
-    val down by impulse { ->
-        pos += Pos.down
+    val bwd by impulse { ->
+        println("bwd")
+        val time = container.seconds()
+        val rotation = r.s(time)
+        val fx = cos(toRadians(rotation)) * accell
+        val fy = sin(toRadians(rotation)) * accell
+        x.forces[time] = -fx
+        y.forces[time] = -fy
     }
-
-    val damage by impulse { ->
-        health -= 10
-        if (health <= 0)
-            delete()
-    }
-
-    val changeColor by impulse { ->
-        color = (color + 1) % 6
-    }
-
-
-    val shoot by impulse { dx: Int, dy: Int ->
-        all?.let {
-            if (it.shotPower > 0) {
-                it.deplete()
-
-                val f = Math.sqrt(dx.toDouble() * dx.toDouble() + dy.toDouble() * dy.toDouble())
-
-                if (f != 0.0)
-                    create(::Bullet, container.rev().asMs(), owner, pos, Pos(
-                            (100.0 * dx.toDouble() / f).toInt(),
-                            (100.0 * dy.toDouble() / f).toInt()))
-            }
-        }
-    }
-}
-
-/**
- * A bullet, hit tests with non-owner player in every frame.
- */
-class Bullet(container: Container, start: Long, owner: Author, val pos: Pos, val vel: Pos) : Entity(container), Drawable, Always {
-    val start by key(start)
-
-    val owner by key(owner)
-
-    val destroy by impulse { ->
-        delete()
-    }
-
-    val dt get() = (container.rev().asMs() - start) / 1000.0f
-
-    val px get() = pos.x.toFloat() + dt * vel.x.toFloat()
-    val py get() = pos.y.toFloat() + dt * vel.y.toFloat()
-
-    override fun draw(batch: Batch, parentAlpha: Float) {
-        batch.color = Color.YELLOW
-        batch.draw(Main.white, px - 2.5f, py - 2.5f, 5f, 5f)
-    }
-
-    override fun call() {
-        if (start + 20000 < container.rev().asMs())
-            destroy()
-
-        for (e in container.index.values)
-            if (e is Player)
-                if (e.owner != owner
-                        && Math.abs(e.pos.x - px) < 10
-                        && Math.abs(e.pos.y - py) < 10) {
-                    e.damage()
-                    destroy()
-                    break
-                }
-
+    val stop by impulse { ->
+        println("stop")
+        val time = container.seconds()
+        x.forces[time] = 0.0
+        y.forces[time] = 0.0
     }
 }
 
@@ -222,7 +151,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
     /**
      * Author, as initialized by the games settings.
      */
-    private val author = game.identity
+    private val author = Author.random()
 
     /**
      * History of this game screen.
@@ -252,12 +181,15 @@ class Main(game: Game) : StageScreen<Game>(game) {
     /**
      * Stream to save to.
      */
-    private val autosaveStream = DataOutputStream(FileOutputStream(File.createTempFile("autosave_", ".stream", File("saves"))))
-
+    private val autosaveStream by lazy {
+        DataOutputStream(FileOutputStream(File.createTempFile("autosave_", ".stream", File("saves"))))
+    }
     /**
      * If given at boot, will load a previous stream.
      */
     var load: File? = null
+
+    var save = false
 
     override fun show() {
         // Get coder.
@@ -274,8 +206,9 @@ class Main(game: Game) : StageScreen<Game>(game) {
         container = object : Container(author) {
             override fun dispatch(time: Revision, id: List<Any?>, method: Method, arg: Any?) {
                 synchronized(container) {
-                    val message = Call(time.time, time.inner, time.author, id, method, arg)
-                    coder.encode(autosaveStream, message)
+                    val message = Call(time.timestep, time.inner, time.author, id, method, arg)
+                    if (save)
+                        coder.encode(autosaveStream, message)
 
                     history = history.copy(history.calls + message)
                     channel.send(null, message)
@@ -344,32 +277,53 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
     var lastFrequent: Long = -1
     var lastSometimes: Long = -1
-    var lastDown = false
+    var lastA = false
+    var lastS = false
+    var lastD = false
+    var lastW = false
     override fun render(delta: Float) {
         synchronized(container) {
             container.revise(System.currentTimeMillis())
 
             if (mine == null && Gdx.input.isKeyJustPressed(Input.Keys.B)) {
-                root.spawn(author, Pos((Math.random() * 300).toInt(), (Math.random() * 300).toInt()))
+                root.spawn(author)
             }
 
             mine?.let {
-                if (Gdx.input.isKeyPressed(Input.Keys.A))
+                val nowA = Gdx.input.isKeyPressed(Input.Keys.A)
+                val nowS = Gdx.input.isKeyPressed(Input.Keys.S)
+                val nowD = Gdx.input.isKeyPressed(Input.Keys.D)
+                val nowW = Gdx.input.isKeyPressed(Input.Keys.W)
+
+
+                if (nowS && !lastS)
+                    it.bwd()
+
+                if (!nowS && lastS)
+                    it.stop()
+
+                if (nowW && !lastW)
+                    it.fwd()
+
+                if (!nowW && lastW)
+                    it.stop()
+
+                if (nowA && !lastA)
                     it.left()
-                if (Gdx.input.isKeyPressed(Input.Keys.D))
+
+                if (!nowA && lastA)
+                    it.stopR()
+
+                if (nowD && !lastD)
                     it.right()
-                if (Gdx.input.isKeyPressed(Input.Keys.W))
-                    it.up()
-                if (Gdx.input.isKeyPressed(Input.Keys.S))
-                    it.down()
 
-                val nowDown = Gdx.input.isButtonPressed(Input.Buttons.LEFT)
-                if (nowDown && !lastDown) {
-                    val coords = stage.root.screenToLocalCoordinates(Vector2(Gdx.input.x.toFloat(), Gdx.input.y.toFloat()))
-                    it.shoot(coords.x.toInt() - it.pos.x, coords.y.toInt() - it.pos.y);
-                }
-                lastDown = nowDown
+                if (!nowD && lastD)
+                    it.stopR()
 
+                lastA = nowA
+                lastS = nowS
+                lastD = nowD
+                lastW = nowW
             }
         }
 
@@ -381,11 +335,6 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
             override fun draw(batch: Batch, parentAlpha: Float) {
                 synchronized(container) {
-                    for (i in 0..(this@Main.root.shotPower / 10)) {
-                        batch.color = Color.GREEN
-                        batch.draw(white, (i * 15).toFloat(), 0f, 5f, 5f)
-                    }
-
                     val time = System.currentTimeMillis()
                     var cfreq = false
                     var csom = false
