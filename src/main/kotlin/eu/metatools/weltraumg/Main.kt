@@ -9,6 +9,7 @@ import com.badlogic.gdx.graphics.g2d.Batch
 import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
+import eu.metatools.kepler.*
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -16,7 +17,6 @@ import eu.metatools.net.jgroups.ValueReceiver
 import eu.metatools.voronois.tools.StageScreen
 import eu.metatools.voronois.tools.dropRight
 import eu.metatools.voronois.tools.popScreen
-import eu.metatools.weltraumg.data.Applier
 import eu.metatools.wepwawet.*
 import ktx.actors.onClick
 import ktx.actors.plus
@@ -25,8 +25,6 @@ import ktx.scene2d.label
 import org.jgroups.Global
 import org.jgroups.Message
 import java.io.*
-import java.lang.Math.*
-import java.util.*
 import kotlin.properties.Delegates.notNull
 
 
@@ -80,62 +78,51 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
 
 
     override fun draw(batch: Batch, parentAlpha: Float) {
+        val pos = body.pos(container.seconds())
+        val rot = body.rot(container.seconds())
         batch.draw(texture,
-                x.s(container.seconds()).toFloat(),
-                y.s(container.seconds()).toFloat(),
+                pos.x.toFloat(), pos.y.toFloat(),
                 texture.regionWidth / 2.0f, texture.regionHeight / 2.0f,
                 texture.regionWidth.toFloat(), texture.regionHeight.toFloat(),
                 1.0f, 1.0f,
-                r.s(container.seconds()).toFloat())
+                Math.toDegrees(rot).toFloat())
     }
 
     val owner by key(owner)
 
-    var x by prop(Applier())
-    var y by prop(Applier())
-    var r by prop(Applier())
+    val body = ComplexBody(container.seconds(), Vec.zero, 0.0, Vec.zero, 0.0, 1.0 / 50)
 
+    val prograde = Settable(0.0, body)
+
+    val lateral = Settable(0.0, body)
+
+    init {
+        body.masses = listOf(constT(Vec.zero to 0.1))
+        body.accelerators = listOf(
+                accLocal(body, constT(Vec.zero), constT(Vec.right), prograde * 3.0),
+                accLocal(body, constT(Vec.right * 0.1), constT(Vec.up), lateral * 0.5),
+                accLocal(body, constT(Vec.left * 0.1), constT(Vec.down), lateral * 0.5))
+    }
 
     val right by impulse { ->
-        val time = container.seconds()
-        r.forces[time] = -raccell
+        lateral.set(container.seconds(), -1.0)
     }
-    val raccell = 40.0
-    val accell = 30.0
     val left by impulse { ->
-        val time = container.seconds()
-
-        r.forces[time] = raccell
+        lateral.set(container.seconds(), 1.0)
     }
     val stopR by impulse { ->
-        val time = container.seconds()
-        r.forces[time] = 0.0
+        lateral.set(container.seconds(), 0.0)
     }
 
     val fwd by impulse { ->
-        println("fwd")
-        val time = container.seconds()
-        val rotation = r.s(time)
-        val fx = cos(toRadians(rotation)) * accell
-        val fy = sin(toRadians(rotation)) * accell
-        x.forces[time] = fx
-        y.forces[time] = fy
+        prograde.set(container.seconds(), 1.0)
     }
 
     val bwd by impulse { ->
-        println("bwd")
-        val time = container.seconds()
-        val rotation = r.s(time)
-        val fx = cos(toRadians(rotation)) * accell
-        val fy = sin(toRadians(rotation)) * accell
-        x.forces[time] = -fx
-        y.forces[time] = -fy
+        prograde.set(container.seconds(), -1.0)
     }
     val stop by impulse { ->
-        println("stop")
-        val time = container.seconds()
-        x.forces[time] = 0.0
-        y.forces[time] = 0.0
+        prograde.set(container.seconds(), 0.0)
     }
 }
 
