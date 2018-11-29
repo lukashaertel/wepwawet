@@ -167,12 +167,14 @@ typealias R2R = AtT<Pair<R2, R>>
  * @param reference The second body.
  * @param gravityConstant The gravity constant of the body.
  */
-fun accGravity(body: Body, reference: Body, gravityConstant: AtT<R>): R2R = { t ->
+fun accGravity(body: Body, reference: Body, gravityConstant: R = 6.674e-11): R2R = { t ->
     val dir = body.pos(t) - reference.pos(t)
-    val g = gravityConstant(t)
-    val (_, m1) = body.comAndMass(t)
-    val (_, m2) = reference.comAndMass(t)
-    dir.normalized() * (g * m1 * m2 / dir.squaredLength) to zero
+    if (dir.squaredLength == 0.0)
+        Vec.zero to zero
+    else {
+        val (_, m1) = body.comAndMass(t)
+        dir.normalized() * (gravityConstant * m1 / dir.squaredLength) to zero
+    }
 }
 
 /**
@@ -268,6 +270,14 @@ class Settable<T>(val default: T, val invalidates: ComplexBody) : AtT<T> {
         return backing.floorEntry(time)?.value ?: default
     }
 }
+
+data class ConstantBody(
+        override val comAndMass: R2R,
+        override val pos: AtT<R2>,
+        override val rot: AtT<R>,
+        override val vel: AtT<R2>,
+        override val velRot: AtT<R>,
+        override val accAndRotAcc: R2R) : Body
 
 class ComplexBody(
         val initialT: R,

@@ -66,6 +66,17 @@ class Root(container: Container) : Entity(container) {
     }
 }
 
+val star = ConstantBody(
+        constT(Vec.zero to 1e+16),
+        constT(Vec(400.0, 400.0)),
+        constT(0.0),
+        constT(Vec.zero),
+        constT(0.0),
+        constT(Vec.zero to 0.0))
+
+val pred = 5
+val predTime = 1.0
+
 /**
  * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
  */
@@ -78,14 +89,21 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
 
 
     override fun draw(batch: Batch, parentAlpha: Float) {
-        val pos = body.pos(container.seconds())
-        val rot = body.rot(container.seconds())
-        batch.draw(texture,
-                pos.x.toFloat(), pos.y.toFloat(),
-                texture.regionWidth / 2.0f, texture.regionHeight / 2.0f,
-                texture.regionWidth.toFloat(), texture.regionHeight.toFloat(),
-                1.0f, 1.0f,
-                Math.toDegrees(rot).toFloat())
+        val ct = container.seconds()
+        for (i in 0..pred) {
+            val pos = body.pos(ct + i * predTime)
+            val rot = body.rot(ct + i * predTime)
+            if (i == 0)
+                batch.color = Color.WHITE
+            else
+                batch.color = Color.WHITE.cpy().set(1f, 1f, 1f, 0.25f)
+            batch.draw(texture,
+                    pos.x.toFloat(), pos.y.toFloat(),
+                    texture.regionWidth / 2.0f, texture.regionHeight / 2.0f,
+                    texture.regionWidth.toFloat(), texture.regionHeight.toFloat(),
+                    1.0f, 1.0f,
+                    Math.toDegrees(rot).toFloat())
+        }
     }
 
     val owner by key(owner)
@@ -99,6 +117,7 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
     init {
         body.masses = listOf(constT(Vec.zero to 0.1))
         body.accelerators = listOf(
+                accGravity(star, body),
                 accLocal(body, constT(Vec.zero), constT(Vec.right), prograde * 3.0),
                 accLocal(body, constT(Vec.right * 0.1), constT(Vec.up), lateral * 0.5),
                 accLocal(body, constT(Vec.left * 0.1), constT(Vec.down), lateral * 0.5))
