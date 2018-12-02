@@ -1,131 +1,6 @@
 package eu.metatools.kepler
 
-import java.lang.StrictMath.*
 import java.util.*
-
-// TODO: MODELING :(
-interface Translatable<T> {
-    operator fun plus(other: T): T
-
-    operator fun minus(other: T): T
-}
-
-interface Scalable<T> {
-    operator fun times(scale: R): T
-
-    operator fun div(scale: R): T
-}
-
-
-data class Vec(val x: R, val y: R) : Translatable<Vec>, Scalable<Vec> {
-    companion object {
-        val left = Vec(-1.0, 0.0)
-
-        val up = Vec(0.0, 1.0)
-
-        val right = Vec(1.0, 0.0)
-
-        val down = Vec(0.0, -1.0)
-
-        val zero = Vec(0.0, 0.0)
-    }
-
-    override operator fun plus(other: Vec) = Vec(x + other.x, y + other.y)
-
-    override operator fun minus(other: Vec) = Vec(x - other.x, y - other.y)
-
-    override operator fun times(scale: R) = Vec(x * scale, y * scale)
-
-    override operator fun div(scale: R) = Vec(x / scale, y / scale)
-
-    operator fun unaryMinus() = Vec(-x, -y)
-
-    fun normal() = Vec(-y, x)
-
-    fun antinormal() = Vec(y, -x)
-
-    fun rotate(angle: R): Vec {
-        val ca = cos(angle)
-        val sa = sin(angle)
-        return Vec(x * ca - y * sa, x * sa + y * ca)
-    }
-
-    fun normalized() = length.let { Vec(x / it, y / it) }
-
-    infix fun dot(other: Vec) = x * x + y * y
-
-    val squaredLength by lazy { x * x + y * y }
-
-    val length by lazy { sqrt(squaredLength) }
-
-    val angle by lazy { atan2(y, x) }
-}
-
-
-typealias R = Double
-
-typealias R2 = Vec
-
-operator fun <T> ((T) -> R).times(r: R): (T) -> R = { t -> this(t) * r }
-operator fun <T> ((T) -> R).div(r: R): (T) -> R = { t -> this(t) / r }
-operator fun <T> ((T) -> R).plus(r: R): (T) -> R = { t -> this(t) + r }
-operator fun <T> ((T) -> R).minus(r: R): (T) -> R = { t -> this(t) - r }
-operator fun <T> ((T) -> R).unaryMinus(): (T) -> R = { t -> -this(t) }
-
-// TODO: Reference systems (what if position is needed, optional, etc).
-typealias AtT<T> = (time: R) -> T
-
-typealias AtP<T> = (pos: R2) -> T
-
-typealias AtTAndP<T> = (time: R, pos: R2) -> T
-
-fun <T> constT(value: T): AtT<T> = { value }
-
-fun <T> constP(value: T): AtP<T> = { value }
-
-fun <T> constTAndP(value: T): AtTAndP<T> = { _, _ -> value }
-
-fun <T> AtT<T>.constP(): AtTAndP<T> = { time, _ -> this(time) }
-
-fun <T> AtP<T>.constT(): AtTAndP<T> = { _, pos -> this(pos) }
-
-const val zero: R = 0.0
-
-const val epsilon: R = 0.0001
-
-val epsilonX = Vec(epsilon, zero)
-
-val epsilonY = Vec(zero, epsilon)
-
-val AtT<R>.ddtR
-    get(): AtT<R> = { t ->
-        (this(t) - this(t - epsilon)) / epsilon
-    }
-
-val AtP<R>.ddxR
-    get(): AtP<R> = { t ->
-        (this(t) - this(t - epsilonX)) / epsilon
-    }
-
-val AtP<R>.ddyR
-    get(): AtP<R> = { t ->
-        (this(t) - this(t - epsilonY)) / epsilon
-    }
-
-val <T> AtT<T>.ddt where T : Scalable<T>, T : Translatable<T>
-    get(): AtT<T> = { t ->
-        (this(t) - this(t - epsilon)) / epsilon
-    }
-
-val <T> AtP<T>.ddx where T : Scalable<T>, T : Translatable<T>
-    get(): AtP<T> = { t ->
-        (this(t) - this(t - epsilonX)) / epsilon
-    }
-
-val <T> AtP<T>.ddy where T : Scalable<T>, T : Translatable<T>
-    get(): AtP<T> = { t ->
-        (this(t) - this(t - epsilonY)) / epsilon
-    }
 
 interface Body {
     /**
@@ -225,36 +100,6 @@ fun comAndMassFrom(masses: List<R2R>): R2R = { t ->
     com to total
 }
 
-inline fun <K, V, R> NavigableMap<K, V>.inex(k: K, interp: (K, V, K, V, K) -> R): R {
-    // Next higher and lower entry
-    val nhe = ceilingEntry(k)
-    val nle = floorEntry(k)
-
-    return if (nhe == null && nle == null) {
-        throw IllegalStateException("empty")
-    } else if (nhe == null) {
-        // Next next lower entry
-        val nnle = lowerEntry(nle.key)
-
-        // If only one, interpolate between single entry, otherwise between both.
-        if (nnle == null)
-            interp(nle.key, nle.value, nle.key, nle.value, k)
-        else
-            interp(nnle.key, nnle.value, nle.key, nle.value, k)
-    } else if (nle == null) {
-        // Next next higher entry
-        val nnhe = higherEntry(nhe.key)
-
-        // If only one, interpolate between single entry, otherwise between both.
-        if (nnhe == null)
-            interp(nhe.key, nhe.value, nhe.key, nhe.value, k)
-        else
-            interp(nhe.key, nhe.value, nnhe.key, nnhe.value, k)
-    } else {
-        // Both present
-        interp(nle.key, nle.value, nhe.key, nhe.value, k)
-    }
-}
 
 class Settable<T>(val default: T, val invalidates: ComplexBody) : AtT<T> {
     private val backing = TreeMap<R, T>()
@@ -298,9 +143,9 @@ class ComplexBody(
             val vel: R2,
             val velRot: R)
 
-    internal val backing = TreeMap<R, Stored>()
+    private val backing = TreeMap<R, Stored>()
 
-    internal fun calcTo(time: R) {
+    private fun calcTo(time: R) {
         if (backing.isEmpty())
             backing[initialT] = Stored(initialPos, initialRot, initialVel, initialVelRot)
 
@@ -317,50 +162,41 @@ class ComplexBody(
         }
     }
 
-    internal fun invalidateFrom(time: R) =
+    fun invalidateFrom(time: R) =
             backing.tailMap(time, true).clear()
+
+    fun invalidateTo(time: R) =
+            backing.headMap(time, false).clear()
 
     override val pos: AtT<R2>
         get() = { t ->
             calcTo(t)
-            backing.inex(t) { t1, a, t2, b, tAt ->
-                if (t1 == t2)
-                    a.pos
-                else
-                    a.pos + (b.pos - a.pos) * (tAt - t1) / (t2 - t1)
+            backing[t]?.pos ?: backing.liftTwo(t) { x0, y0, x1, y1, x ->
+                linearInterp(x0, y0.pos, x1, y1.pos, x)
             }
         }
 
     override val rot: AtT<R>
         get() = { t ->
             calcTo(t)
-            backing.inex(t) { t1, a, t2, b, tAt ->
-                if (t1 == t2)
-                    a.rot
-                else
-                    a.rot + (b.rot - a.rot) * (tAt - t1) / (t2 - t1)
+            backing[t]?.rot ?: backing.liftTwo(t) { x0, y0, x1, y1, x ->
+                linearInterp(x0, y0.rot, x1, y1.rot, x)
             }
         }
 
     override val vel: AtT<R2>
         get() = { t ->
             calcTo(t)
-            backing.inex(t) { t1, a, t2, b, tAt ->
-                if (t1 == t2)
-                    a.vel
-                else
-                    a.vel + (b.vel - a.vel) * (tAt - t1) / (t2 - t1)
+            backing[t]?.vel ?: backing.liftTwo(t) { x0, y0, x1, y1, x ->
+                linearInterp(x0, y0.vel, x1, y1.vel, x)
             }
         }
 
     override val velRot: AtT<R>
         get() = { t ->
             calcTo(t)
-            backing.inex(t) { t1, a, t2, b, tAt ->
-                if (t1 == t2)
-                    a.velRot
-                else
-                    a.velRot + (b.velRot - a.velRot) * (tAt - t1) / (t2 - t1)
+            backing[t]?.velRot ?: backing.liftTwo(t) { x0, y0, x1, y1, x ->
+                linearInterp(x0, y0.velRot, x1, y1.velRot, x)
             }
         }
 
