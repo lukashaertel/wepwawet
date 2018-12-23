@@ -62,6 +62,10 @@ dependencies {
     compile "io.github.libktx:ktx-async:$ktx_version"
     compile "io.github.libktx:ktx-box2d:$ktx_version"
     compile "io.github.libktx:ktx-scene2d:$ktx_version"
+    compile "org.apache.commons:commons-math3:3.6.1"
+    compile "com.panayotis.javaplot:javaplot:0.5.0"
+
+
 }
 
 

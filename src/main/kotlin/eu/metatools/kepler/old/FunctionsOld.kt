@@ -1,4 +1,8 @@
-package eu.metatools.kepler
+package eu.metatools.kepler.old
+
+import eu.metatools.kepler.R
+import eu.metatools.kepler.R2
+import eu.metatools.kepler.Vec
 
 
 /**
@@ -7,13 +11,13 @@ package eu.metatools.kepler
  * @param reference The second body.
  * @param gravityConstant The gravity constant of the body.
  */
-fun accGravity(body: Body, reference: Body, gravityConstant: R = 6.674e-11): R2R = { t ->
+fun accGravity(body: Body, reference: Body, gravityConstant: R = 6.674e-11): AtT<R2> = { t ->
     val dir = body.pos(t) - reference.pos(t)
     if (dir.squaredLength == 0.0)
-        Vec.zero to zero
+        Vec.zero
     else {
-        val (_, m1) = body.comAndMass(t)
-        dir.normalized() * (gravityConstant * m1 / dir.squaredLength) to zero
+        val m1 = body.m(t)
+        dir.normalized() * (gravityConstant * m1 / dir.squaredLength)
     }
 }
 
@@ -22,26 +26,40 @@ fun accGravity(body: Body, reference: Body, gravityConstant: R = 6.674e-11): R2R
  * @param direction The direction of the acceleration. Should be normalized.
  * @param acceleration The scalar acceleration in that direction.
  */
-fun accDir(direction: AtT<R2>, acceleration: AtT<R>): R2R = { t ->
+fun accDir(direction: AtT<R2>, acceleration: AtT<R>): AtT<R2> = { t ->
     val dir = direction(t)
     val acc = acceleration(t)
-    dir * acc to zero
+    dir * acc
 }
 
 /**
- * Returns acceleration and rotational acceleration for the given applied local force.
+ * Returns acceleration for the given applied local force.
+ * @param reference The reference body, used for rotation, mass and center of mass.
+ * @param direction The direction of the force, relative to reference. Should be normalized.
+ * @param force The scalar force in the direction at the displacement.
+ */
+fun accLocal(reference: Body, direction: AtT<R2>, force: AtT<R>): AtT<R2> = { t ->
+    val m = reference.m(t)
+    val rot = reference.rot(t)
+    val acc = direction(t).rotate(rot) * force(t) / m
+    acc
+}
+
+/**
+ * Returns rotational acceleration for the given applied local force.
  * @param reference The reference body, used for rotation, mass and center of mass.
  * @param displacement The displacement of the force relative to the reference.
  * @param direction The direction of the force, relative to reference. Should be normalized.
  * @param force The scalar force in the direction at the displacement.
  */
-fun accLocal(reference: Body, displacement: AtT<R2>, direction: AtT<R2>, force: AtT<R>): R2R = { t ->
-    val (com, m) = reference.comAndMass(t)
+fun accRotLocal(reference: Body, displacement: AtT<R2>, direction: AtT<R2>, force: AtT<R>): AtT<R> = { t ->
+    val com = reference.com(t)
+    val m = reference.m(t)
     val rot = reference.rot(t)
     val acc = direction(t).rotate(rot) * force(t) / m
     val d = (displacement(t) - com).rotate(rot)
     val accRot = d.x * acc.y - d.y * acc.x
-    acc to accRot
+    accRot
 }
 
 /**
@@ -53,14 +71,4 @@ fun accLocal(reference: Body, displacement: AtT<R2>, direction: AtT<R2>, force: 
  */
 fun forceFromIsp(reference: Body, isp: AtTAndP<R>, massFlow: AtT<R>, standardGravity: R = 10.0): AtT<R> = { t ->
     standardGravity * isp(t, reference.pos(t)) * -massFlow(t)
-}
-
-/**
- * Returns the center of mass and total mass from a set of displaced masses.
- */
-fun comAndMassFrom(masses: List<R2R>): R2R = { t ->
-    val resolved = masses.map { it(t) }
-    val total = resolved.fold(zero) { l, r -> l + r.second }
-    val com = resolved.fold(Vec.zero) { l, r -> l + r.first * r.second / total }
-    com to total
 }

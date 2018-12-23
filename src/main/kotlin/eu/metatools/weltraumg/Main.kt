@@ -3,13 +3,12 @@ package eu.metatools.weltraumg
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Input
 import com.badlogic.gdx.graphics.Color
-import com.badlogic.gdx.graphics.Pixmap
-import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Batch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
 import eu.metatools.kepler.*
+import eu.metatools.kepler.old.*
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -68,15 +67,16 @@ class Root(container: Container) : Entity(container) {
 }
 
 val star = ConstantBody(
-        const(Vec.zero to 1e+16),
+        const(Vec.zero),
+        const(1e+16),
         const(Vec(400.0, 400.0)),
         const(0.0),
         const(Vec.zero),
         const(0.0),
-        const(Vec.zero to 0.0))
+        const(Vec.zero),
+        const(0.0))
 
-val pred = 20
-val predTime = 0.5
+val pred = 20.0
 
 interface HasComplexBody {
     val body: ComplexBody
@@ -98,34 +98,49 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         shapeRenderer.color = Color.WHITE
 
         val ct = container.seconds()
+        body.update(ct + pred)
 
-        var lx = 0f
-        var ly = 0f
-        for (i in 0..pred) {
-            val pos = body.pos(ct + i * predTime)
-            val rot = body.rot(ct + i * predTime)
-            val x = pos.x.toFloat()
-            val y = pos.y.toFloat()
+        val pos = body.pos(ct)
+        val rot = body.rot(ct)
+        val x = pos.x.toFloat()
+        val y = pos.y.toFloat()
 
-            if (i == 0) {
-                val p1 = (Vec.left + Vec.up).times(20.0).rotate(rot)
-                val p2 = (Vec.right).times(20.0).rotate(rot)
-                val p3 = (Vec.left + Vec.down).times(20.0).rotate(rot)
-                shapeRenderer.triangle(
-                        x + p1.x.toFloat(),
-                        y + p1.y.toFloat(),
-                        x + p2.x.toFloat(),
-                        y + p2.y.toFloat(),
-                        x + p3.x.toFloat(),
-                        y + p3.y.toFloat())
-            } else {
-                val ofx = Vec((x - lx).toDouble(), (y - ly).toDouble()).normal().normalized().times(5.0)
-                shapeRenderer.line(lx, ly, x, y, Color.GREEN, Color.GREEN)
-                shapeRenderer.line(lx, ly, lx + ofx.x.toFloat(), ly + ofx.y.toFloat(), Color.GREEN, Color.GREEN)
-            }
+      //  println("Pos $pos, rot $rot, vel $vel, acc $acc")
 
-            lx = x
-            ly = y
+        // Render ship triangle
+        val p1 = (Vec.left + Vec.up).times(20.0).rotate(rot)
+        val p2 = (Vec.right).times(20.0).rotate(rot)
+        val p3 = (Vec.left + Vec.down).times(20.0).rotate(rot)
+        shapeRenderer.triangle(
+                x + p1.x.toFloat(),
+                y + p1.y.toFloat(),
+                x + p2.x.toFloat(),
+                y + p2.y.toFloat(),
+                x + p3.x.toFloat(),
+                y + p3.y.toFloat())
+
+        // Render calculated positions
+        val samples = body.calculatedFrom(ct).values
+        samples.windowed(2) { l ->
+            val (l1, l2) = l
+
+            val pn = l1.pos + (l2.pos - l1.pos).normal().normalized().times(10.0)
+            val pr = l1.pos + Vec.right.rotate(l1.rot).times(10.0)
+            shapeRenderer.line(
+                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
+                    Color.GREEN, Color.GREEN)
+
+            shapeRenderer.line(
+                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+                    pn.x.toFloat(), pn.y.toFloat(),
+                    Color.GREEN, Color.RED)
+
+            shapeRenderer.line(
+                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+                    pr.x.toFloat(), pr.y.toFloat(),
+                    Color.TEAL, Color.TEAL)
+
         }
 
         shapeRenderer.end()
@@ -134,19 +149,24 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
 
     val owner by key(owner)
 
-    override val body = ComplexBody(container.seconds(), Vec.zero, 0.0, Vec.right * 10.0, 0.0, 1.0 / 32.0)
+    override val body = ComplexBody(container.seconds(), Vec.zero, 0.0, Vec.right * 10.0, 0.0)
 
     val prograde = Settable(0.0, body)
 
     val lateral = Settable(0.0, body)
 
     init {
-        body.masses = listOf(const(Vec.zero to 1.0))
-        body.accelerators = listOf(
-                accGravity(star, body),
-                accLocal(body, const(Vec.zero), const(Vec.right), { t -> prograde(t) * 30.0 }),
-                accLocal(body, const(Vec.right * 0.1), const(Vec.up), { t -> lateral(t) * 8.0 }),
-                accLocal(body, const(Vec.left * 0.1), const(Vec.down), { t -> lateral(t) * 8.0 }))
+        body.sourceCOM = listOf(const(Vec.zero))
+        body.sourceMass = listOf(const(1.0))
+        body.sourceAcc = listOf(
+              //  accGravity(star, body),
+                accLocal(body, const(Vec.right), { t -> prograde(t) * 30.0 }),
+                accLocal(body, const(Vec.up), { t -> lateral(t) * 1.0 }),
+                accLocal(body, const(Vec.down), { t -> lateral(t) * 1.0 }))
+        body.sourceAccRot = listOf(
+                accRotLocal(body, const(Vec.zero), const(Vec.right), { t -> prograde(t) * 30.0 }),
+                accRotLocal(body, const(Vec.right * 0.1), const(Vec.up), { t -> lateral(t) * 1.0 }),
+                accRotLocal(body, const(Vec.left * 0.1), const(Vec.down), { t -> lateral(t) * 1.0 }))
     }
 
     val right by impulse { ->
@@ -173,11 +193,6 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
 
 class Main(game: Game) : StageScreen<Game>(game) {
     companion object {
-        val white by lazy {
-            Texture(Pixmap(1, 1, Pixmap.Format.RGB888).apply {
-                drawPixel(0, 0, Color.WHITE.toIntBits())
-            })
-        }
         val shapeRenderer by lazy { ShapeRenderer().apply { setAutoShapeType(true) } }
     }
 
@@ -401,7 +416,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
                         if (csom && e is Sometimes)
                             e.call()
                         if (e is HasComplexBody)
-                            e.body.invalidateTo(container.seconds() - 10.0)
+                            e.body.invalidateTo(container.seconds() - 3.0)
                     }
                 }
             }
