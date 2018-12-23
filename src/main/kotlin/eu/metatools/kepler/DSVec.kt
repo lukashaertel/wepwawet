@@ -138,6 +138,12 @@ data class DSVec(val x: DS, val y: DS) {
     val value
         get() =
             Vec(x.value, y.value)
+
+    /**
+     * Copies the materialized vector to an array, respects boundaries.
+     */
+    fun copyTo(array: DoubleArray) =
+            value.copyTo(array)
 }
 
 /**
@@ -157,3 +163,6 @@ operator fun Double.times(vec: DSVec) =
  */
 operator fun DS.times(vec: DSVec) =
         DSVec(this * vec.x, this * vec.y)
+
+fun DS.createConstantVec(x: Double, y: Double) =
+        DSVec(createConstant(x), createConstant(y))

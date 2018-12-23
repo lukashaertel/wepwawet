@@ -1,12 +1,11 @@
 package eu.metatools.kepler.old
 
-import eu.metatools.kepler.R
-import eu.metatools.kepler.R2
+import eu.metatools.kepler.Vec
 
-typealias AtT<T> = (time: R) -> T
+typealias AtT<T> = (time: Double) -> T
 
-typealias AtP<T> = (pos: R2) -> T
+typealias AtP<T> = (pos: Vec) -> T
 
-typealias AtTAndP<T> = (time: R, pos: R2) -> T
+typealias AtTAndP<T> = (time: Double, pos: Vec) -> T
 
 fun <T, U> const(value: U): (T) -> U = { value }

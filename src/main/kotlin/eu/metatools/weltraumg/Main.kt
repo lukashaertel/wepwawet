@@ -7,8 +7,11 @@ import com.badlogic.gdx.graphics.g2d.Batch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
-import eu.metatools.kepler.*
+import eu.metatools.kepler.Gravity
+import eu.metatools.kepler.SingleBodySimulation
+import eu.metatools.kepler.Vec
 import eu.metatools.kepler.old.*
+import eu.metatools.kepler.stepOnSmooth
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -22,6 +25,7 @@ import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.scene2d.button
 import ktx.scene2d.label
+import org.apache.commons.math3.ode.nonstiff.DormandPrince853Integrator
 import org.jgroups.Global
 import org.jgroups.Message
 import java.io.*
@@ -76,11 +80,14 @@ val star = ConstantBody(
         const(Vec.zero),
         const(0.0))
 
+val starRad = 15f
+
 val pred = 20.0
 
 interface HasComplexBody {
     val body: ComplexBody
 }
+
 
 /**
  * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
@@ -90,6 +97,19 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
     val all get() = container.findAuto<Root>()
 
 
+    val sbs = SingleBodySimulation().apply {
+        addAcc {
+            Gravity.acc(Vec(400.0, 400.0), 1e+16, pos)
+        }
+        addAcc {
+            val forward = Vec.left.rotate(rot)
+            val f = stepOnSmooth(t, 16.0) - stepOnSmooth(t, 17.0)
+            forward * 20.0 * f
+        }
+
+    }
+    val int = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-10, 1.0e-10)
+
     override fun draw(batch: Batch, parentAlpha: Float) {
         batch.end()
         shapeRenderer.begin()
@@ -97,51 +117,64 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
         shapeRenderer.color = Color.WHITE
 
-        val ct = container.seconds()
-        body.update(ct + pred)
-
-        val pos = body.pos(ct)
-        val rot = body.rot(ct)
-        val x = pos.x.toFloat()
-        val y = pos.y.toFloat()
-
-      //  println("Pos $pos, rot $rot, vel $vel, acc $acc")
-
-        // Render ship triangle
-        val p1 = (Vec.left + Vec.up).times(20.0).rotate(rot)
-        val p2 = (Vec.right).times(20.0).rotate(rot)
-        val p3 = (Vec.left + Vec.down).times(20.0).rotate(rot)
-        shapeRenderer.triangle(
-                x + p1.x.toFloat(),
-                y + p1.y.toFloat(),
-                x + p2.x.toFloat(),
-                y + p2.y.toFloat(),
-                x + p3.x.toFloat(),
-                y + p3.y.toFloat())
-
-        // Render calculated positions
-        val samples = body.calculatedFrom(ct).values
-        samples.windowed(2) { l ->
-            val (l1, l2) = l
-
-            val pn = l1.pos + (l2.pos - l1.pos).normal().normalized().times(10.0)
-            val pr = l1.pos + Vec.right.rotate(l1.rot).times(10.0)
-            shapeRenderer.line(
-                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
-                    Color.GREEN, Color.GREEN)
-
-            shapeRenderer.line(
-                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-                    pn.x.toFloat(), pn.y.toFloat(),
-                    Color.GREEN, Color.RED)
-
-            shapeRenderer.line(
-                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-                    pr.x.toFloat(), pr.y.toFloat(),
-                    Color.TEAL, Color.TEAL)
-
+        val initial = Vec(400.0, 300.0)
+        val f = { t: Double -> sbs.integrate(int, 0.0, initial, 0.0, Vec(90.0, 0.0), 0.0, t) }
+        val e = 60.0
+        val r = 300
+        var l: Vec = initial
+        for (i in 1..r) {
+            val c = f(i * e / r)
+            val color = Color.BLUE.cpy().lerp(Color.TEAL, i.toFloat() / r)
+            shapeRenderer.line(l.x.toFloat(), l.y.toFloat(), c.pos.x.toFloat(), c.pos.y.toFloat(), color, color)
+            l = c.pos
         }
+
+
+//        val ct = container.seconds()
+//        body.update(ct + pred)
+//
+//        val pos = body.pos(ct)
+//        val rot = body.rot(ct)
+//        val x = pos.x.toFloat()
+//        val y = pos.y.toFloat()
+//
+//      //  println("Pos $pos, rot $rot, vel $vel, acc $acc")
+//
+//        // Render ship triangle
+//        val p1 = (Vec.left + Vec.up).times(20.0).rotate(rot)
+//        val p2 = (Vec.right).times(20.0).rotate(rot)
+//        val p3 = (Vec.left + Vec.down).times(20.0).rotate(rot)
+//        shapeRenderer.triangle(
+//                x + p1.x.toFloat(),
+//                y + p1.y.toFloat(),
+//                x + p2.x.toFloat(),
+//                y + p2.y.toFloat(),
+//                x + p3.x.toFloat(),
+//                y + p3.y.toFloat())
+//
+//        // Render calculated positions
+//        val samples = body.calculatedFrom(ct).values
+//        samples.windowed(2) { l ->
+//            val (l1, l2) = l
+//
+//            val pn = l1.pos + (l2.pos - l1.pos).normal().normalized().times(10.0)
+//            val pr = l1.pos + Vec.right.rotate(l1.rot).times(10.0)
+//            shapeRenderer.line(
+//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+//                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
+//                    Color.GREEN, Color.GREEN)
+//
+//            shapeRenderer.line(
+//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+//                    pn.x.toFloat(), pn.y.toFloat(),
+//                    Color.GREEN, Color.RED)
+//
+//            shapeRenderer.line(
+//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+//                    pr.x.toFloat(), pr.y.toFloat(),
+//                    Color.TEAL, Color.TEAL)
+//
+//        }
 
         shapeRenderer.end()
         batch.begin()
@@ -159,7 +192,7 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         body.sourceCOM = listOf(const(Vec.zero))
         body.sourceMass = listOf(const(1.0))
         body.sourceAcc = listOf(
-              //  accGravity(star, body),
+                //  accGravity(star, body),
                 accLocal(body, const(Vec.right), { t -> prograde(t) * 30.0 }),
                 accLocal(body, const(Vec.up), { t -> lateral(t) * 1.0 }),
                 accLocal(body, const(Vec.down), { t -> lateral(t) * 1.0 }))
@@ -401,7 +434,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
                     shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
                     val starpos = star.pos(container.seconds())
                     shapeRenderer.color = Color.WHITE
-                    shapeRenderer.circle(starpos.x.toFloat(), starpos.y.toFloat(), 50f)
+                    shapeRenderer.circle(starpos.x.toFloat(), starpos.y.toFloat(), starRad)
 
                     shapeRenderer.end()
                     batch.begin()

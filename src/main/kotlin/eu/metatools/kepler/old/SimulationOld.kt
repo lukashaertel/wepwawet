@@ -1,6 +1,7 @@
 package eu.metatools.kepler.old
 
-import eu.metatools.kepler.*
+import eu.metatools.kepler.Vec
+import eu.metatools.kepler.toVec
 import org.apache.commons.math3.analysis.interpolation.HermiteInterpolator
 import java.util.*
 
@@ -8,48 +9,48 @@ interface Body {
     /**
      * Center of mass at time.
      */
-    val com: AtT<R2>
+    val com: AtT<Vec>
 
     /**
      * Mass at time.
      */
-    val m: AtT<R>
+    val m: AtT<Double>
 
     /**
      * Position at time.
      */
-    val pos: AtT<R2>
+    val pos: AtT<Vec>
 
     /**
      * Rotation at time.
      */
-    val rot: AtT<R>
+    val rot: AtT<Double>
 
     /**
      * Velocity at time.
      */
-    val vel: AtT<R2>
+    val vel: AtT<Vec>
 
     /**
      * Rotational velocity at time.
      */
-    val velRot: AtT<R>
+    val velRot: AtT<Double>
 
     /**
      * Acceleration at time.
      */
-    val acc: AtT<R2>
+    val acc: AtT<Vec>
 
     /**
      * Rotational acceleration at time.
      */
-    val accRot: AtT<R>
+    val accRot: AtT<Double>
 }
 
 class Settable<T>(val default: T, val target: ComplexBody) : AtT<T> {
-    private val backing = TreeMap<R, T>()
+    private val backing = TreeMap<Double, T>()
 
-    fun set(time: R, value: T) {
+    fun set(time: Double, value: T) {
         if (backing.floorEntry(time)?.value != value) {
             target.invalidateFrom(time)
             target.materialize(time)
@@ -57,76 +58,76 @@ class Settable<T>(val default: T, val target: ComplexBody) : AtT<T> {
         }
     }
 
-    override fun invoke(time: R): T {
+    override fun invoke(time: Double): T {
         return backing.floorEntry(time)?.value ?: default
     }
 }
 
 data class ConstantBody(
-        override val com: AtT<R2>,
-        override val m: AtT<R>,
-        override val pos: AtT<R2>,
-        override val rot: AtT<R>,
-        override val vel: AtT<R2>,
-        override val velRot: AtT<R>,
-        override val acc: AtT<R2>,
-        override val accRot: AtT<R>) : Body
+        override val com: AtT<Vec>,
+        override val m: AtT<Double>,
+        override val pos: AtT<Vec>,
+        override val rot: AtT<Double>,
+        override val vel: AtT<Vec>,
+        override val velRot: AtT<Double>,
+        override val acc: AtT<Vec>,
+        override val accRot: AtT<Double>) : Body
 
 data class Sample(
-        val pos: R2,
-        val rot: R,
-        val vel: R2,
-        val velRot: R,
-        val acc: R2,
-        val accRot: R)
+        val pos: Vec,
+        val rot: Double,
+        val vel: Vec,
+        val velRot: Double,
+        val acc: Vec,
+        val accRot: Double)
 
 class ComplexBody(
-        val initialT: R,
-        val initialPos: R2,
-        val initialRot: R,
-        val initialVel: R2,
-        val initialVelRot: R,
-        val resolution: R = 1.0 / 4.0) : Body {
+        val initialT: Double,
+        val initialPos: Vec,
+        val initialRot: Double,
+        val initialVel: Vec,
+        val initialVelRot: Double,
+        val resolution: Double = 1.0 / 4.0) : Body {
 
-    private val backing = TreeMap<R, Sample>()
+    private val backing = TreeMap<Double, Sample>()
 
-    var sourceCOM = emptyList<AtT<R2>>()
+    var sourceCOM = emptyList<AtT<Vec>>()
 
-    override val com: AtT<R2>
+    override val com: AtT<Vec>
         get() = { sourceCOM.fold(Vec.zero) { l, r -> l + r(it) } }
 
-    var sourceMass = emptyList<AtT<R>>()
+    var sourceMass = emptyList<AtT<Double>>()
 
-    override val m: AtT<R>
-        get() = { sourceMass.fold(0.toR()) { l, r -> l + r(it) } }
+    override val m: AtT<Double>
+        get() = { sourceMass.fold(0.0) { l, r -> l + r(it) } }
 
-    var sourceAcc = emptyList<AtT<R2>>()
+    var sourceAcc = emptyList<AtT<Vec>>()
 
-    override val acc: AtT<R2>
+    override val acc: AtT<Vec>
         get() = { sourceAcc.fold(Vec.zero) { l, r -> l + r(it) } }
 
-    var sourceAccRot = emptyList<AtT<R>>()
+    var sourceAccRot = emptyList<AtT<Double>>()
 
-    override val accRot: AtT<R>
-        get() = { sourceAccRot.fold(0.toR()) { l, r -> l + r(it) } }
+    override val accRot: AtT<Double>
+        get() = { sourceAccRot.fold(0.0) { l, r -> l + r(it) } }
 
-    fun invalidateTo(time: R) =
+    fun invalidateTo(time: Double) =
             calculatedTo(time).clear()
 
-    fun invalidateFrom(time: R) =
+    fun invalidateFrom(time: Double) =
             calculatedFrom(time).clear()
 
-    fun materialize(time: R) {
+    fun materialize(time: Double) {
         backing[time] = Sample(pos(time), rot(time), vel(time), velRot(time), acc(time), accRot(time))
     }
 
-    fun calculatedTo(time: R) =
+    fun calculatedTo(time: Double) =
             backing.headMap(time, false)
 
-    fun calculatedFrom(time: R) =
+    fun calculatedFrom(time: Double) =
             backing.tailMap(time, true)
 
-    fun update(time: R) {
+    fun update(time: Double) {
         if (backing.isEmpty())
             materialize(initialT)
 
@@ -150,7 +151,7 @@ class ComplexBody(
 //        }
     }
 
-    override val pos: AtT<R2>
+    override val pos: AtT<Vec>
         get() = { t ->
             if (backing.isEmpty()) {
                 initialPos
@@ -165,7 +166,7 @@ class ComplexBody(
             }
         }
 
-    override val rot: AtT<R>
+    override val rot: AtT<Double>
         get() = { t ->
             if (backing.isEmpty()) {
                 initialRot
@@ -176,11 +177,11 @@ class ComplexBody(
                             doubleArrayOf(sv.rot),
                             doubleArrayOf(sv.velRot),
                             doubleArrayOf(sv.accRot))
-                interpolator.value(t).toR()
+                interpolator.value(t).single()
             }
         }
 
-    override val vel: AtT<R2>
+    override val vel: AtT<Vec>
         get() = { t ->
             if (backing.isEmpty()) {
                 initialVel
@@ -194,7 +195,7 @@ class ComplexBody(
             }
         }
 
-    override val velRot: AtT<R>
+    override val velRot: AtT<Double>
         get() = { t ->
             if (backing.isEmpty()) {
                 initialVelRot
@@ -204,7 +205,7 @@ class ComplexBody(
                     interpolator.addSamplePoint(st,
                             doubleArrayOf(sv.velRot),
                             doubleArrayOf(sv.accRot))
-                interpolator.value(t).toR()
+                interpolator.value(t).single()
             }
         }
 }

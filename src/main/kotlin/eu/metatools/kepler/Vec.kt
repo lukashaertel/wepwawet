@@ -1,70 +1,50 @@
 package eu.metatools.kepler
 
+import org.apache.commons.math3.util.FastMath.*
+
 // Note: R and toR are used to allow moving quickly to other data types by changing conversion and type.
 
-/**
- * Alias for type of value.
- */
-typealias R = Double
-
-const val zero: R = 0.0
-
-
-/**
- * Converts a number to a value of [R].
- */
-fun Number.toR() = toDouble()
-
-/**
- * Converts a double array to its component.
- */
-fun DoubleArray.toR() = single()
-
-
-/**
- * Vector name alias.
- */
-typealias R2 = Vec
 
 /**
  * Converts a double array to a vector.
  */
-fun DoubleArray.toVec() = Vec(get(0), get(1))
+fun DoubleArray.toVec(offset: Int = 0) = Vec(get(offset), get(offset + 1))
+
 
 /**
  * Two dimensional vector class.
  */
-data class Vec(val x: R, val y: R) {
+data class Vec(val x: Double, val y: Double) {
     /**
      * Constructs a vector from arbitrary scalars as components [x] and [y].
      */
-    constructor(x: Number, y: Number) : this(x.toR(), y.toR())
+    constructor(x: Number, y: Number) : this(x.toDouble(), y.toDouble())
 
     companion object {
         /**
          * Zero-vector.
          */
-        val zero = Vec(0.toR(), 0.toR())
+        val zero = Vec(0.0, 0.0)
 
         /**
          * Left-vector, [x] is negative one.
          */
-        val left = Vec((-1).toR(), 0.toR())
+        val left = Vec(-1.0, 0.0)
 
         /**
          * Up vector, [y] is one.
          */
-        val up = Vec(0.toR(), 1.toR())
+        val up = Vec(0.0, 1.0)
 
         /**
          * Right-vector, [x] is one.
          */
-        val right = Vec(1.toR(), 0.toR())
+        val right = Vec(1.0, 0.0)
 
         /**
          * Up vector, [y] is negative one.
          */
-        val down = Vec(0.toR(), (-1).toR())
+        val down = Vec(0.0, -1.0)
     }
 
     /**
@@ -94,20 +74,20 @@ data class Vec(val x: R, val y: R) {
     /**
      * Multiplication of [x] and [y] components with a scalar.
      */
-    operator fun times(scale: R) =
+    operator fun times(scale: Double) =
             Vec(x * scale, y * scale)
 
     /**
      * Division of [x] and [y] components by a scalar.
      */
-    operator fun div(scale: R) =
+    operator fun div(scale: Double) =
             Vec(x / scale, y / scale)
 
     /**
      * Multiplication of [x] and [y] components with an arbitrary scalar.
      */
     operator fun times(scale: Number) =
-            scale.toR().let {
+            scale.toDouble().let {
                 Vec(x * it, y * it)
             }
 
@@ -115,7 +95,7 @@ data class Vec(val x: R, val y: R) {
      * Division of [x] and [y] components by a scalar.
      */
     operator fun div(scale: Number) =
-            scale.toR().let {
+            scale.toDouble().let {
                 Vec(x / it, y / it)
             }
 
@@ -138,9 +118,9 @@ data class Vec(val x: R, val y: R) {
     /**
      * Rotates the vector by [angle].
      */
-    fun rotate(angle: R): Vec {
-        val ca = StrictMath.cos(angle)
-        val sa = StrictMath.sin(angle)
+    fun rotate(angle: Double): Vec {
+        val ca = cos(angle)
+        val sa = sin(angle)
         return Vec(x * ca - y * sa, x * sa + y * ca)
     }
 
@@ -148,7 +128,7 @@ data class Vec(val x: R, val y: R) {
      * True if vector is zero on [x] and [y].
      */
     fun isEmpty() =
-            x == 0.toR() && y == 0.toR()
+            x == 0.toDouble() && y == 0.toDouble()
 
     /**
      * Normalized vector if not empty, length is one.
@@ -177,30 +157,45 @@ data class Vec(val x: R, val y: R) {
     /**
      * Length of vector.
      */
-    val length by lazy { StrictMath.hypot(x, y) }
+    val length by lazy { hypot(x, y) }
 
     /**
      * Angle of vector.
      */
-    val angle by lazy { StrictMath.atan2(y, x) }
+    val angle by lazy { atan2(y, x) }
 
     /**
      * Formats the vector.
      */
     override fun toString() =
             "($x, $y)"
+
+    /**
+     * Copies the vector to an array, respects boundaries.
+     */
+    fun copyTo(array: DoubleArray) =
+            when (array.size) {
+                0 -> Unit
+                1 -> {
+                    array[0] = x
+                }
+                else -> {
+                    array[0] = x
+                    array[1] = y
+                }
+            }
 }
 
 /**
  * Multiplication of a scalar and [Vec.x] and [Vec.y] components of [vec].
  */
-operator fun R.times(vec: Vec) =
+operator fun Double.times(vec: Vec) =
         Vec(vec.x * this, vec.y * this)
 
 /**
  * Multiplication of an arbitrary scalar and [Vec.x] and [Vec.y] components of [vec].
  */
 operator fun Number.times(vec: Vec) =
-        toR().let {
+        toDouble().let {
             Vec(vec.x * it, vec.y * it)
         }

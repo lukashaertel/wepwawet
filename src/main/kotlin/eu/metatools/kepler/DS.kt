@@ -154,3 +154,8 @@ fun DS.squared() = pow(2)
  */
 fun DS.cubed() = pow(3)
 
+/**
+ * The square root of the [DS] cubed.
+ */
+fun DS.cubedSqrt() = cubed().sqrt()
+

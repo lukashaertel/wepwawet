@@ -1,5 +1,6 @@
 package eu.metatools.kepler
 
+
 import com.panayotis.gnuplot.JavaPlot
 import com.panayotis.gnuplot.plot.AbstractPlot
 import com.panayotis.gnuplot.style.Smooth
@@ -42,20 +43,14 @@ interface PlotDSL {
     /**
      * Plot a vector function.
      */
-    fun addVec(function: (Double) -> Vec)
+    fun addMulti(labels: Map<Int, String>, function: (Double) -> DoubleArray)
 }
 
-/**
- * Adds a [DS] function.
- */
-fun PlotDSL.addDS(function: (DS) -> DS) =
-        add { it -> function(it).value }
+fun PlotDSL.addMulti(labels: List<String>, function: (Double) -> DoubleArray) =
+        addMulti(labels.withIndex().associate { (it.index + 1) to it.value }, function)
 
-/**
- * Adds a [DS] vector function.
- */
-fun PlotDSL.addDSVec(function: (DS) -> DSVec) =
-        addVec { it -> function(it).value }
+fun PlotDSL.addMulti(function: (Double) -> DoubleArray) =
+        addMulti(emptyMap(), function)
 
 /**
  * Extend of plot outside of the value domains.
@@ -92,7 +87,7 @@ private class NotifyingTerminal(val on: GNUPlotTerminal,
     }
 
     override fun equals(other: Any?): Boolean {
-        return on.equals(other)
+        return on == other
     }
 }
 
@@ -150,8 +145,8 @@ fun plot(resolution: Int = 512, extend: Extend = Extend.default, config: PlotDSL
         }
 
         override fun add(function: (Double) -> Double) {
-            // Add plot of function.
-            plot.addPlot(currentPoints.map { x ->
+            // Materialize all values, memorize min and max for axis.
+            val materialized = currentPoints.map { x ->
                 currentMinX = min(currentMinX, x)
                 currentMaxX = max(currentMaxX, x)
 
@@ -161,29 +156,47 @@ fun plot(resolution: Int = 512, extend: Extend = Extend.default, config: PlotDSL
                 currentMaxY = max(currentMaxY, y)
 
                 doubleArrayOf(x, y)
-            }.toTypedArray())
+            }
+
+            // Add plot of function.
+            plot.addPlot(materialized.toTypedArray())
 
             // Apply current styles.
             applyPlotStyle()
         }
 
+        override fun addMulti(labels: Map<Int, String>, function: (Double) -> DoubleArray) {
+            // Track safe access index.
+            var count = Int.MAX_VALUE
 
-        override fun addVec(function: (Double) -> Vec) {
-            // Add plot of vector function.
-            plot.addPlot(currentPoints.map { x ->
+            // Materialize all values, memorize min and max for axis.
+            val materialized = currentPoints.map { x ->
                 currentMinX = min(currentMinX, x)
                 currentMaxX = max(currentMaxX, x)
 
-                val (y1, y2) = function(x)
+                val ys = function(x)
 
-                currentMinY = min(currentMinY, min(y1, y2))
-                currentMaxY = max(currentMaxY, max(y1, y2))
+                for (y in ys) {
+                    currentMinY = min(currentMinY, y)
+                    currentMaxY = max(currentMaxY, y)
+                }
 
-                doubleArrayOf(x, y1, y2)
-            }.toTypedArray())
+                count = min(count, ys.size)
 
-            // Apply current styles.
-            applyPlotStyle()
+                DoubleArray(ys.size + 1) {
+                    if (it == 0) x else ys[it - 1]
+                }
+            }
+
+            val t = currentTitle
+
+            for (i in 1..count) {
+                currentTitle = labels[i] ?: "$t[$i]"
+                plot.addPlot(materialized.map { doubleArrayOf(it[0], it[i]) }.toTypedArray())
+                applyPlotStyle()
+            }
+
+            currentTitle = t
         }
 
         /**
@@ -209,10 +222,7 @@ fun plot(resolution: Int = 512, extend: Extend = Extend.default, config: PlotDSL
     plot.getAxis("x").setBoundaries(currentMinX - diffX * extend.left, currentMaxX + diffX * extend.right)
     plot.getAxis("y").setBoundaries(currentMinY - diffY * extend.bottom, currentMaxY + diffY * extend.top)
 
-    // Semaphore for waiting for completion.
-
     // Display plot in thread.
-
     thread {
         // Acquire entrance to the plotter.
         plotLock.acquire()
@@ -225,23 +235,4 @@ fun plot(resolution: Int = 512, extend: Extend = Extend.default, config: PlotDSL
         // Plot everything.
         plot.plot()
     }
-}
-
-fun main(args: Array<String>) {
-    val f1 = { x: DS -> x.sin() }
-    val f2 = { x: DS -> x.cos() }
-    val f3 = { x: DS -> discreteHard(x, mapOf(0.0 to 1.0, 3.0 to 3.0, 5.0 to 1.5)) }
-
-    plot {
-        range(-3.0, 7.0)
-        addDS(f1)
-        addDS(f2)
-    }
-
-    plot {
-        range(-3.0, 7.0)
-        title("Discrete")
-        addDS(f3)
-    }
-
 }
