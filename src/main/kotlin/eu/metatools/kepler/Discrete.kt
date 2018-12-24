@@ -2,6 +2,9 @@ package eu.metatools.kepler
 
 import org.apache.commons.math3.util.FastMath.*
 
+/**
+ * Commonly used, factor at which curve reaches 0.999
+ */
 private fun tanhFactor(width: Double) =
         10.0 / (width * 3.0)
 
@@ -42,6 +45,19 @@ fun stepOnSmoothPrime(x: Double, at: Double, width: Double = 0.1) =
  */
 fun dsStepOnSmoothPrime(x: DS, at: Double, width: Double = 0.1) =
         tanhFactor(width) * ((x - at) * tanhFactor(width)).sech().squared() / 2.0
+
+
+/**
+ * Integral of [stepOnSmooth].
+ */
+fun stepOnSmoothIntegated(x: Double, at: Double, width: Double = 0.1) =
+        (log(cosh((x - at) * tanhFactor(width))) + x * tanhFactor(width)) / (2.0 * tanhFactor(width))
+
+/**
+ * Integral of [dsStepOnSmooth].
+ */
+fun dsStepOnSmoothIntegated(x: DS, at: Double, width: Double = 0.1) =
+        (((x - at) * tanhFactor(width)).cosh().log() + x * tanhFactor(width)) / (2.0 * tanhFactor(width))
 
 
 /**
@@ -164,26 +180,12 @@ fun dsDiscreteHard(x: DS, valueRanges: Map<Double, Double>, initialValue: Double
 
 fun main(args: Array<String>) {
     plot {
-        range(0.0, 2.0)
-        title("SOS")
-        add { stepOnSmooth(it, 1.0, 0.1) }
-        title("SOS'")
-        add { stepOnSmoothPrime(it, 1.0, 0.1) }
-    }
-
-    plot {
-        range(0.0, 2.0)
-        title("SOS")
-        add { stepOnSmooth(it, 1.0, 0.5) }
-        title("SOS'")
-        add { stepOnSmoothPrime(it, 1.0, 0.5) }
-    }
-
-    plot {
-        range(0.0, 2.0)
-        title("SOS")
-        add { stepOnSmooth(it, 1.0, 1.0) }
-        title("SOS'")
-        add { stepOnSmoothPrime(it, 1.0, 1.0) }
+        range(0.0, 4.0)
+        title("f")
+        add { stepOnSmooth(it, 1.0) - stepOnSmooth(it, 3.0) }
+        title("f'")
+        add { stepOnSmoothPrime(it, 1.0) - stepOnSmoothPrime(it, 3.0) }
+        title("F")
+        add { stepOnSmoothIntegated(it, 1.0) - stepOnSmoothIntegated(it, 3.0) }
     }
 }
