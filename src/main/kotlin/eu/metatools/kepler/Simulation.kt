@@ -12,6 +12,7 @@ import kotlin.properties.Delegates.observable
  */
 data class Context(val t: Double, val pos: Vec, val rot: Double, val vel: Vec, val velRot: Double)
 
+
 /**
  * Performs single body simulation.
  */
@@ -70,7 +71,7 @@ class SingleBodySimulation : SecondOrderDifferentialEquations {
             doubleArrayOf(pos.x, pos.y, rot, vel.x, vel.y, velRot)
 
     /**
-     * Dimension of the simulationis 1 * 3.
+     * Dimension of the simulation is 1 * 3.
      */
     override fun getDimension() = 3
 

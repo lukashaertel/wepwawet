@@ -1,24 +1,48 @@
 package eu.metatools.kepler
 
-import org.apache.commons.math3.util.FastMath.abs
-import org.apache.commons.math3.util.FastMath.tanh
+import org.apache.commons.math3.util.FastMath.*
+
+private fun tanhFactor(width: Double) =
+        10.0 / (width * 3.0)
 
 /**
  * Function on [x] that is one after [at] (point five at that exact point). [width] gives the radius of the gap which
  * the function takes to turn on.
  */
 fun stepOnSmooth(x: Double, at: Double, width: Double = 0.1) =
-        (tanh((x - at) * 10.0 / (width * 3.0)) + 1.0) /
+        (tanh((x - at) * tanhFactor(width)) + 1.0) /
                 2.0
-
 
 /**
  * Function on [x] that is one after [at] (point five at that exact point). [width] gives the radius of the gap which
  * the function takes to turn on.
  */
 fun dsStepOnSmooth(x: DS, at: Double, width: Double = 0.1) =
-        (((x - at) * 10.0 / (width * 3.0)).tanh() + 1.0) /
+        (((x - at) * tanhFactor(width)).tanh() + 1.0) /
                 2.0
+
+/**
+ * Secant-hyperbolicus.
+ */
+fun sech(x: Double) = 1.0 / cosh(x)
+
+/**
+ * Secant-hyperbolicus.
+ */
+fun DS.sech() = cosh().reciprocal()
+
+/**
+ * Derivative of [stepOnSmooth].
+ */
+fun stepOnSmoothPrime(x: Double, at: Double, width: Double = 0.1) =
+        tanhFactor(width) * sech((x - at) * tanhFactor(width)).squared() / 2.0
+
+/**
+ * Derivative of [dsStepOnSmooth].
+ */
+fun dsStepOnSmoothPrime(x: DS, at: Double, width: Double = 0.1) =
+        tanhFactor(width) * ((x - at) * tanhFactor(width)).sech().squared() / 2.0
+
 
 /**
  * Function on [x] that initially has the value [initialValue] and, for each pair in [valueRanges], takes
@@ -136,4 +160,30 @@ fun dsDiscreteHard(x: DS, valueRanges: Map<Double, Double>, initialValue: Double
 
     // Return computed equation.
     return eqn
+}
+
+fun main(args: Array<String>) {
+    plot {
+        range(0.0, 2.0)
+        title("SOS")
+        add { stepOnSmooth(it, 1.0, 0.1) }
+        title("SOS'")
+        add { stepOnSmoothPrime(it, 1.0, 0.1) }
+    }
+
+    plot {
+        range(0.0, 2.0)
+        title("SOS")
+        add { stepOnSmooth(it, 1.0, 0.5) }
+        title("SOS'")
+        add { stepOnSmoothPrime(it, 1.0, 0.5) }
+    }
+
+    plot {
+        range(0.0, 2.0)
+        title("SOS")
+        add { stepOnSmooth(it, 1.0, 1.0) }
+        title("SOS'")
+        add { stepOnSmoothPrime(it, 1.0, 1.0) }
+    }
 }
