@@ -38,26 +38,30 @@ fun DS.sech() = cosh().reciprocal()
  * Derivative of [stepOnSmooth].
  */
 fun stepOnSmoothPrime(x: Double, at: Double, width: Double = 0.1) =
-        tanhFactor(width) * sech((x - at) * tanhFactor(width)).squared() / 2.0
+        tanhFactor(width) * sech((x - at) * tanhFactor(width)).squared() /
+                2.0
 
 /**
  * Derivative of [dsStepOnSmooth].
  */
 fun dsStepOnSmoothPrime(x: DS, at: Double, width: Double = 0.1) =
-        tanhFactor(width) * ((x - at) * tanhFactor(width)).sech().squared() / 2.0
+        tanhFactor(width) * ((x - at) * tanhFactor(width)).sech().squared() /
+                2.0
 
 
 /**
  * Integral of [stepOnSmooth].
  */
 fun stepOnSmoothIntegated(x: Double, at: Double, width: Double = 0.1) =
-        (log(cosh((x - at) * tanhFactor(width))) + x * tanhFactor(width)) / (2.0 * tanhFactor(width))
+        (log(cosh((x - at) * tanhFactor(width))) + x * tanhFactor(width)) /
+                (2.0 * tanhFactor(width))
 
 /**
  * Integral of [dsStepOnSmooth].
  */
 fun dsStepOnSmoothIntegated(x: DS, at: Double, width: Double = 0.1) =
-        (((x - at) * tanhFactor(width)).cosh().log() + x * tanhFactor(width)) / (2.0 * tanhFactor(width))
+        (((x - at) * tanhFactor(width)).cosh().log() + x * tanhFactor(width)) /
+                (2.0 * tanhFactor(width))
 
 
 /**
