@@ -78,3 +78,32 @@ object Local {
             dirToCOM.rotate(refRotation) cross force.rotate(refRotation) /
                     refMass
 }
+
+/**
+ * Directional force.
+ */
+object Force {
+    /**
+     * Computes the force at [t] to achieve an impulse change of [impulse] at [t0] (over [duration] seconds).
+     */
+    fun forceForImpulse(impulse: Vec, t0: Double, t: Double, duration: Double = 1.0) =
+            impulse * (stepOnSmooth(t, t0 - 0.5 * duration) - stepOnSmooth(t, t0 + 0.5 * duration)) / duration
+
+    /**
+     * Computes the force at [t] to achieve an impulse change of [impulse] at [t0] (over [duration] seconds).
+     */
+    fun forceForImpulse(impulse: DSVec, t0: Double, t: DS, duration: Double = 1.0) =
+            impulse * (dsStepOnSmooth(t, t0 - 0.5 * duration) - dsStepOnSmooth(t, t0 + 0.5 * duration)) / duration
+
+    /**
+     * Returns acceleration for the given applied directional force.
+     */
+    fun acc(refMass: Double, force: Vec) =
+            force / refMass
+
+    /**
+     * Returns acceleration for the given applied directional force.
+     */
+    fun dsAcc(refMass: DS, force: DSVec) =
+            force / refMass
+}

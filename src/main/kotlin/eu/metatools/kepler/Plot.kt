@@ -99,7 +99,7 @@ private val plotLock = Semaphore(1)
 /**
  * Start a plot configuration and plots after configuring. Non-blocking, run in non-daemon thread.
  */
-fun plot(resolution: Int = 512, extend: Extend = Extend.default, config: PlotDSL.() -> Unit) {
+fun plot(resolution: Int = 1024, extend: Extend = Extend.default, config: PlotDSL.() -> Unit) {
     // Create plot to configure.
     val plot = JavaPlot()
     plot.setKey(JavaPlot.Key.TOP_LEFT)

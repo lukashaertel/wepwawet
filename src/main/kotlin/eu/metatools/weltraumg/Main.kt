@@ -7,11 +7,7 @@ import com.badlogic.gdx.graphics.g2d.Batch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
-import eu.metatools.kepler.Gravity
-import eu.metatools.kepler.SingleBodySimulation
-import eu.metatools.kepler.Vec
-import eu.metatools.kepler.old.*
-import eu.metatools.kepler.stepOnSmooth
+import eu.metatools.kepler.*
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -70,45 +66,61 @@ class Root(container: Container) : Entity(container) {
     }
 }
 
-val star = ConstantBody(
-        const(Vec.zero),
-        const(1e+16),
-        const(Vec(400.0, 400.0)),
-        const(0.0),
-        const(Vec.zero),
-        const(0.0),
-        const(Vec.zero),
-        const(0.0))
+val star = Triple(Vec(400, 400), 1e+16, 15)
 
-val starRad = 15f
+val tracer = 60.0
 
-val pred = 20.0
-
-interface HasComplexBody {
-    val body: ComplexBody
+interface TimeInvalidated {
+    fun invalidate(currentTime: Double)
 }
 
 
 /**
  * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
  */
-class Player(container: Container, owner: Author) : Entity(container), Drawable, HasComplexBody {
+class Player(container: Container, owner: Author) : Entity(container), Drawable, TimeInvalidated {
 
     val all get() = container.findAuto<Root>()
 
-
-    val sbs = SingleBodySimulation().apply {
+    val sbs: SingleBodySimulation = SingleBodySimulation().apply {
         addAcc {
+            // Constant gravity effect.
             Gravity.acc(Vec(400.0, 400.0), 1e+16, pos)
         }
+
         addAcc {
-            val forward = Vec.left.rotate(rot)
-            val f = stepOnSmooth(t, 16.0) - stepOnSmooth(t, 17.0)
-            forward * 20.0 * f
+            Local.acc(1.0, rot, Vec.right * 30.0 * prograde[t])
+
         }
 
+        addAcc {
+            Local.acc(1.0, rot, Vec.up * lateral[t])
+        }
+
+        addAcc {
+            Local.acc(1.0, rot, Vec.down * lateral[t])
+        }
+
+        addAccRot {
+            Local.accRot(1.0, rot, Vec.right * 30.0 * prograde[t], Vec.zero)
+        }
+
+        addAccRot {
+            Local.accRot(1.0, rot, Vec.up * lateral[t], Vec.right)
+        }
+
+        addAccRot {
+            Local.accRot(1.0, rot, Vec.down * lateral[t], Vec.left)
+        }
     }
-    val int = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-10, 1.0e-10)
+
+    val dpi = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-10, 1.0e-10)
+
+    val cbi = ContinuousBodyIntegrator(sbs, dpi, Context(container.seconds(), Vec(400.0, 300.0), 0.0, Vec(90.0, 0.0), 0.0))
+
+    override fun invalidate(currentTime: Double) {
+        cbi.drop(currentTime - tracer)
+    }
 
     override fun draw(batch: Batch, parentAlpha: Float) {
         batch.end()
@@ -117,64 +129,32 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
         shapeRenderer.color = Color.WHITE
 
-        val initial = Vec(400.0, 300.0)
-        val f = { t: Double -> sbs.integrate(int, 0.0, initial, 0.0, Vec(90.0, 0.0), 0.0, t) }
-        val e = 60.0
-        val r = 300
-        var l: Vec = initial
-        for (i in 1..r) {
-            val c = f(i * e / r)
-            val color = Color.BLUE.cpy().lerp(Color.TEAL, i.toFloat() / r)
-            shapeRenderer.line(l.x.toFloat(), l.y.toFloat(), c.pos.x.toFloat(), c.pos.y.toFloat(), color, color)
-            l = c.pos
+        val ct = container.seconds()
+        val (t, pos, rot, vel, velRot) = cbi.integrate(ct)
+        val x = pos.x.toFloat()
+        val y = pos.y.toFloat()
+
+        // Render ship triangle
+        val p1 = (Vec.left + Vec.up).times(10.0).rotate(rot)
+        val p2 = (Vec.right).times(15.0).rotate(rot)
+        val p3 = (Vec.left + Vec.down).times(10.0).rotate(rot)
+        shapeRenderer.triangle(
+                x + p1.x.toFloat(),
+                y + p1.y.toFloat(),
+                x + p2.x.toFloat(),
+                y + p2.y.toFloat(),
+                x + p3.x.toFloat(),
+                y + p3.y.toFloat())
+
+        // Render calculated positions
+        val samples = cbi.calculated(from = ct - tracer).values
+        samples.windowed(2) { l ->
+            val (l1, l2) = l
+            shapeRenderer.line(
+                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
+                    Color.GREEN, Color.GREEN)
         }
-
-
-//        val ct = container.seconds()
-//        body.update(ct + pred)
-//
-//        val pos = body.pos(ct)
-//        val rot = body.rot(ct)
-//        val x = pos.x.toFloat()
-//        val y = pos.y.toFloat()
-//
-//      //  println("Pos $pos, rot $rot, vel $vel, acc $acc")
-//
-//        // Render ship triangle
-//        val p1 = (Vec.left + Vec.up).times(20.0).rotate(rot)
-//        val p2 = (Vec.right).times(20.0).rotate(rot)
-//        val p3 = (Vec.left + Vec.down).times(20.0).rotate(rot)
-//        shapeRenderer.triangle(
-//                x + p1.x.toFloat(),
-//                y + p1.y.toFloat(),
-//                x + p2.x.toFloat(),
-//                y + p2.y.toFloat(),
-//                x + p3.x.toFloat(),
-//                y + p3.y.toFloat())
-//
-//        // Render calculated positions
-//        val samples = body.calculatedFrom(ct).values
-//        samples.windowed(2) { l ->
-//            val (l1, l2) = l
-//
-//            val pn = l1.pos + (l2.pos - l1.pos).normal().normalized().times(10.0)
-//            val pr = l1.pos + Vec.right.rotate(l1.rot).times(10.0)
-//            shapeRenderer.line(
-//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-//                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
-//                    Color.GREEN, Color.GREEN)
-//
-//            shapeRenderer.line(
-//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-//                    pn.x.toFloat(), pn.y.toFloat(),
-//                    Color.GREEN, Color.RED)
-//
-//            shapeRenderer.line(
-//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-//                    pr.x.toFloat(), pr.y.toFloat(),
-//                    Color.TEAL, Color.TEAL)
-//
-//        }
 
         shapeRenderer.end()
         batch.begin()
@@ -182,45 +162,29 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
 
     val owner by key(owner)
 
-    override val body = ComplexBody(container.seconds(), Vec.zero, 0.0, Vec.right * 10.0, 0.0)
+    val prograde = Coupling(0.0, invalidating = cbi::reset)
 
-    val prograde = Settable(0.0, body)
-
-    val lateral = Settable(0.0, body)
-
-    init {
-        body.sourceCOM = listOf(const(Vec.zero))
-        body.sourceMass = listOf(const(1.0))
-        body.sourceAcc = listOf(
-                //  accGravity(star, body),
-                accLocal(body, const(Vec.right), { t -> prograde(t) * 30.0 }),
-                accLocal(body, const(Vec.up), { t -> lateral(t) * 1.0 }),
-                accLocal(body, const(Vec.down), { t -> lateral(t) * 1.0 }))
-        body.sourceAccRot = listOf(
-                accRotLocal(body, const(Vec.zero), const(Vec.right), { t -> prograde(t) * 30.0 }),
-                accRotLocal(body, const(Vec.right * 0.1), const(Vec.up), { t -> lateral(t) * 1.0 }),
-                accRotLocal(body, const(Vec.left * 0.1), const(Vec.down), { t -> lateral(t) * 1.0 }))
-    }
+    val lateral = Coupling(0.0, invalidating = cbi::reset)
 
     val right by impulse { ->
-        lateral.set(container.seconds(), -1.0)
+        lateral[container.seconds()] = -1.0
     }
     val left by impulse { ->
-        lateral.set(container.seconds(), 1.0)
+        lateral[container.seconds()] = 1.0
     }
     val stopR by impulse { ->
-        lateral.set(container.seconds(), 0.0)
+        lateral[container.seconds()] = 0.0
     }
 
     val fwd by impulse { ->
-        prograde.set(container.seconds(), 1.0)
+        prograde[container.seconds()] = 1.0
     }
 
     val bwd by impulse { ->
-        prograde.set(container.seconds(), -1.0)
+        prograde[container.seconds()] = -1.0
     }
     val stop by impulse { ->
-        prograde.set(container.seconds(), 0.0)
+        prograde[container.seconds()] = 0.0
     }
 }
 
@@ -432,9 +396,8 @@ class Main(game: Game) : StageScreen<Game>(game) {
                     shapeRenderer.begin()
                     shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
                     shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
-                    val starpos = star.pos(container.seconds())
                     shapeRenderer.color = Color.WHITE
-                    shapeRenderer.circle(starpos.x.toFloat(), starpos.y.toFloat(), starRad)
+                    shapeRenderer.circle(star.first.x.toFloat(), star.first.y.toFloat(), star.third.toFloat())
 
                     shapeRenderer.end()
                     batch.begin()
@@ -448,8 +411,8 @@ class Main(game: Game) : StageScreen<Game>(game) {
                             e.call()
                         if (csom && e is Sometimes)
                             e.call()
-                        if (e is HasComplexBody)
-                            e.body.invalidateTo(container.seconds() - 3.0)
+                        if (e is TimeInvalidated)
+                            e.invalidate(container.seconds())
                     }
                 }
             }

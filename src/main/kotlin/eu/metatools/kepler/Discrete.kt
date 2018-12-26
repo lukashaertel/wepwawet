@@ -2,10 +2,11 @@ package eu.metatools.kepler
 
 import org.apache.commons.math3.util.FastMath.*
 
+
 /**
  * Commonly used, factor at which curve reaches 0.999
  */
-private fun tanhFactor(width: Double) =
+fun tanhFactor(width: Double) =
         10.0 / (width * 3.0)
 
 /**
@@ -182,14 +183,27 @@ fun dsDiscreteHard(x: DS, valueRanges: Map<Double, Double>, initialValue: Double
     return eqn
 }
 
+
+/**
+ * Computes the radius for step on smooth. Since tanh is point-symmetric, this is linear scaling of [A] over
+ * two [scale]s.
+ */
+fun radiusForSmooth(A: Double, scale: Double = 1.0) =
+        A / (scale * 2.0)
+
 fun main(args: Array<String>) {
+    plotParameterFinding(4.0)
+}
+
+private fun plotParameterFinding(area: Double, s: Double = 1.0) {
+    val r = radiusForSmooth(area, s)
     plot {
-        range(0.0, 4.0)
+        range(-r - 1.0, r + 1.0)
         title("f")
-        add { stepOnSmooth(it, 1.0) - stepOnSmooth(it, 3.0) }
+        add { stepOnSmooth(it, -r) * s - stepOnSmooth(it, r) * s }
         title("f'")
-        add { stepOnSmoothPrime(it, 1.0) - stepOnSmoothPrime(it, 3.0) }
+        add { stepOnSmoothPrime(it, -r) * s - stepOnSmoothPrime(it, r) * s }
         title("F")
-        add { stepOnSmoothIntegated(it, 1.0) - stepOnSmoothIntegated(it, 3.0) }
+        add { stepOnSmoothIntegated(it, -r) * s - stepOnSmoothIntegated(it, r) * s }
     }
 }
