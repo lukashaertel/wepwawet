@@ -66,9 +66,10 @@ class Root(container: Container) : Entity(container) {
     }
 }
 
-val star = Triple(Vec(400, 400), 1e+16, 15)
+val stars = listOf(
+        Triple(Vec(400, 400), 1e+16, 25))
 
-val tracer = 60.0
+val tracer = 240.0
 
 interface TimeInvalidated {
     fun invalidate(currentTime: Double)
@@ -83,10 +84,11 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
     val all get() = container.findAuto<Root>()
 
     val sbs: SingleBodySimulation = SingleBodySimulation().apply {
-        addAcc {
-            // Constant gravity effect.
-            Gravity.acc(Vec(400.0, 400.0), 1e+16, pos)
-        }
+        for ((p, m, _) in stars)
+            addAcc {
+                // Constant gravity effect.
+                Gravity.acc(p, m, pos)
+            }
 
         addAcc {
             Local.acc(1.0, rot, Vec.right * 30.0 * prograde[t])
@@ -130,7 +132,7 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         shapeRenderer.color = Color.WHITE
 
         val ct = container.seconds()
-        val (t, pos, rot, vel, velRot) = cbi.integrate(ct)
+        val (t, pos, rot, vel, velRot) = cbi.slotted(ct)
         val x = pos.x.toFloat()
         val y = pos.y.toFloat()
 
@@ -150,10 +152,21 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         val samples = cbi.calculated(from = ct - tracer).values
         samples.windowed(2) { l ->
             val (l1, l2) = l
+
+            val c1 = Color.BLUE.cpy().lerp(Color.GREEN, ((l1.t - (ct - tracer)) / tracer).toFloat())
+            val c2 = Color.BLUE.cpy().lerp(Color.GREEN, ((l2.t - (ct - tracer)) / tracer).toFloat())
+
+            val pn = l1.pos + Vec.right.rotate(l1.rot) * 10.0
+
             shapeRenderer.line(
                     l1.pos.x.toFloat(), l1.pos.y.toFloat(),
                     l2.pos.x.toFloat(), l2.pos.y.toFloat(),
-                    Color.GREEN, Color.GREEN)
+                    c1, c2)
+
+            shapeRenderer.line(
+                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+                    pn.x.toFloat(), pn.y.toFloat(),
+                    c1, c1.cpy().lerp(Color.BLACK, 0.5f))
         }
 
         shapeRenderer.end()
@@ -397,7 +410,9 @@ class Main(game: Game) : StageScreen<Game>(game) {
                     shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
                     shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
                     shapeRenderer.color = Color.WHITE
-                    shapeRenderer.circle(star.first.x.toFloat(), star.first.y.toFloat(), star.third.toFloat())
+
+                    for ((p, _, r) in stars)
+                        shapeRenderer.circle(p.x.toFloat(), p.y.toFloat(), r.toFloat())
 
                     shapeRenderer.end()
                     batch.begin()

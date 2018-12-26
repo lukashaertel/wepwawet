@@ -4,7 +4,7 @@ import org.apache.commons.math3.ode.AbstractIntegrator
 import org.apache.commons.math3.ode.FirstOrderConverter
 import org.apache.commons.math3.ode.SecondOrderDifferentialEquations
 import org.apache.commons.math3.ode.nonstiff.DormandPrince853Integrator
-import java.lang.Math.toDegrees
+import org.apache.commons.math3.util.FastMath.*
 import java.util.*
 import kotlin.properties.Delegates.observable
 
@@ -12,6 +12,29 @@ import kotlin.properties.Delegates.observable
  * Computation context.
  */
 data class Context(val t: Double, val pos: Vec, val rot: Double, val vel: Vec, val velRot: Double) {
+    companion object {
+        /**
+         * Linear interpolation for [t] between 0.0 and 1.0.
+         */
+        fun lerp(t: Double, a: Context, b: Context) =
+                (1.0 - t).let { it ->
+                    Context(it * a.t + t * b.t,
+                            it * a.pos + t * b.pos,
+                            it * a.rot + t * b.rot,
+                            it * a.vel + t * b.vel,
+                            it * a.velRot + t * b.velRot)
+                }
+
+        /**
+         * Linear interpolation for [t] between [u] and [v].
+         */
+        fun lerp(t: Double, u: Double, a: Context, v: Double, b: Context) =
+                if (u == v)
+                    a
+                else
+                    lerp((t - u) / (v - u), a, b)
+    }
+
     /**
      * Converts the context to a double array of position, rotation and derivatives. Drops [t].
      */
@@ -181,6 +204,23 @@ class ContinuousBodyIntegrator(val singleBodySimulation: SingleBodySimulation,
             singleBodySimulation.integrate(integrator, base, t).also {
                 backing[t] = it
             }
+    }
+
+    fun slotted(t: Double, resolution: Double = 1.0 / 10.0): Context {
+        // Get slot of lower and higher keys.
+        val fe = floor(t / resolution) * resolution
+        val ce = ceil(t / resolution) * resolution
+
+        // Return single output if keys are equal.
+        if (fe == ce)
+            return integrate(fe)
+
+        // Integrate for both (more likely to reuse).
+        val a = integrate(fe)
+        val b = integrate(ce)
+
+        // Interpolate.
+        return Context.lerp(t, a.t, a, b.t, b)
     }
 }
 
