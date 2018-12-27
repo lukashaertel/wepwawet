@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
 import eu.metatools.kepler.*
+import eu.metatools.kepler.dgl.*
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -83,42 +84,42 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
 
     val all get() = container.findAuto<Root>()
 
-    val sbs: SingleBodySimulation = SingleBodySimulation().apply {
+    val obs: OneBodySimulation = OneBodySimulation().apply {
         for ((p, m, _) in stars)
-            addAcc {
+            effects.addAcc {
                 // Constant gravity effect.
                 Gravity.acc(p, m, pos)
             }
 
-        addAcc {
+        effects.addAcc {
             Local.acc(1.0, rot, Vec.right * 30.0 * prograde[t])
 
         }
 
-        addAcc {
+        effects.addAcc {
             Local.acc(1.0, rot, Vec.up * lateral[t])
         }
 
-        addAcc {
+        effects.addAcc {
             Local.acc(1.0, rot, Vec.down * lateral[t])
         }
 
-        addAccRot {
+        effects.addAccRot {
             Local.accRot(1.0, rot, Vec.right * 30.0 * prograde[t], Vec.zero)
         }
 
-        addAccRot {
+        effects.addAccRot {
             Local.accRot(1.0, rot, Vec.up * lateral[t], Vec.right)
         }
 
-        addAccRot {
+        effects.addAccRot {
             Local.accRot(1.0, rot, Vec.down * lateral[t], Vec.left)
         }
     }
 
     val dpi = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-10, 1.0e-10)
 
-    val cbi = ContinuousBodyIntegrator(sbs, dpi, Context(container.seconds(), Vec(400.0, 300.0), 0.0, Vec(90.0, 0.0), 0.0))
+    val cbi = ContinuousIntegrator(obs, dpi, Context(container.seconds(), Vec(400.0, 300.0), 0.0, Vec(90.0, 0.0), 0.0))
 
     override fun invalidate(currentTime: Double) {
         cbi.drop(currentTime - tracer)

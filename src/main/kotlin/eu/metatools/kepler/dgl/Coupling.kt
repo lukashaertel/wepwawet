@@ -1,5 +1,6 @@
-package eu.metatools.kepler
+package eu.metatools.kepler.dgl
 
+import eu.metatools.kepler.discreteSmooth
 import java.util.*
 
 /**
