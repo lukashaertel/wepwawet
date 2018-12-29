@@ -15,7 +15,7 @@ interface Simulation<T> {
 fun main(args: Array<String>) {
     val nbs = NBodySimulation(3)
     nbs.effects.addAcc {
-        it.fold(Vec.zero) { l, r ->
+        it.second.fold(Vec.zero) { l, r ->
             l + Gravity.acc(r.pos, 1e+16, pos)
         }
     }

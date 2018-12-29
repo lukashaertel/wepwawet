@@ -12,7 +12,7 @@ class NBodySimulation(val max: Int) : SecondOrderDifferentialEquations, Simulati
     /**
      * Effect compiler.
      */
-    val effects = EffectCompiler<Context, List<Context>>()
+    val effects = EffectCompiler<Context, Pair<Int, List<Context>>>()
 
     /**
      * Dimension of the simulation is max * 1 * 3.
@@ -27,20 +27,16 @@ class NBodySimulation(val max: Int) : SecondOrderDifferentialEquations, Simulati
         }
 
         contexts.forEachIndexed { i, c ->
-            // Other contexts
-            val other = contexts.subList(0, i) + contexts.subList(i + 1, contexts.size)
-
             // Assign acceleration.
-            effects.compiledAcc(c, other).let { (x, y) ->
+            effects.compiledAcc(c, i to contexts).let { (x, y) ->
                 yDDot[i * 3 + 0] = x
                 yDDot[i * 3 + 1] = y
             }
 
             // Assign rotational acceleration.
-            yDDot[i * 3 + 2] = effects.compiledAccRot(c, other)
+            yDDot[i * 3 + 2] = effects.compiledAccRot(c, i to contexts)
         }
     }
-
 
     /**
      * First order DE for this second order DE.

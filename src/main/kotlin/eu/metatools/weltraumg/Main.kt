@@ -7,7 +7,9 @@ import com.badlogic.gdx.graphics.g2d.Batch
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
-import eu.metatools.kepler.*
+import eu.metatools.kepler.Gravity
+import eu.metatools.kepler.Local
+import eu.metatools.kepler.Vec
 import eu.metatools.kepler.dgl.*
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
@@ -67,9 +69,6 @@ class Root(container: Container) : Entity(container) {
     }
 }
 
-val stars = listOf(
-        Triple(Vec(400, 400), 1e+16, 25))
-
 val tracer = 240.0
 
 interface TimeInvalidated {
@@ -84,42 +83,64 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
 
     val all get() = container.findAuto<Root>()
 
-    val obs: OneBodySimulation = OneBodySimulation().apply {
-        for ((p, m, _) in stars)
-            effects.addAcc {
-                // Constant gravity effect.
-                Gravity.acc(p, m, pos)
+    val obs: NBodySimulation = NBodySimulation(2).apply {
+        effects.apply {
+            addAcc {
+                it.second.fold(Vec.zero) { l, r ->
+                    l + Gravity.acc(r.pos, 1e+16, pos)
+                }
             }
 
-        effects.addAcc {
-            Local.acc(1.0, rot, Vec.right * 30.0 * prograde[t])
+            addAcc {
+                if (it.first == 0)
+                    Local.acc(1.0, rot, Vec.right * 30.0 * prograde[t])
+                else
+                    Vec.zero
+            }
 
+            addAcc {
+                if (it.first == 0)
+                    Local.acc(1.0, rot, Vec.up * lateral[t])
+                else
+                    Vec.zero
+            }
+
+            addAcc {
+                if (it.first == 0)
+                    Local.acc(1.0, rot, Vec.down * lateral[t])
+                else
+                    Vec.zero
+            }
+
+            addAccRot {
+                if (it.first == 0)
+                    Local.accRot(1.0, rot, Vec.right * 30.0 * prograde[t], Vec.zero)
+                else
+                    0.0
+            }
+
+            addAccRot {
+                if (it.first == 0)
+                    Local.accRot(1.0, rot, Vec.up * lateral[t], Vec.right)
+                else
+                    0.0
+            }
+
+            addAccRot {
+                if (it.first == 0)
+                    Local.accRot(1.0, rot, Vec.down * lateral[t], Vec.left)
+                else
+                    0.0
+            }
         }
 
-        effects.addAcc {
-            Local.acc(1.0, rot, Vec.up * lateral[t])
-        }
-
-        effects.addAcc {
-            Local.acc(1.0, rot, Vec.down * lateral[t])
-        }
-
-        effects.addAccRot {
-            Local.accRot(1.0, rot, Vec.right * 30.0 * prograde[t], Vec.zero)
-        }
-
-        effects.addAccRot {
-            Local.accRot(1.0, rot, Vec.up * lateral[t], Vec.right)
-        }
-
-        effects.addAccRot {
-            Local.accRot(1.0, rot, Vec.down * lateral[t], Vec.left)
-        }
     }
 
     val dpi = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-10, 1.0e-10)
 
-    val cbi = ContinuousIntegrator(obs, dpi, Context(container.seconds(), Vec(400.0, 300.0), 0.0, Vec(90.0, 0.0), 0.0))
+    val cbi = ContinuousIntegrator(obs, dpi, listOf(
+            Context(container.seconds(), Vec(400.0, 300.0), 0.0, Vec(0.0, 0.0), 0.0),
+            Context(container.seconds(), Vec(600.0, 500.0), 0.0, Vec(0.0, 0.0), 0.0)))
 
     override fun invalidate(currentTime: Double) {
         cbi.drop(currentTime - tracer)
@@ -133,7 +154,9 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         shapeRenderer.color = Color.WHITE
 
         val ct = container.seconds()
-        val (t, pos, rot, vel, velRot) = cbi.slotted(ct)
+        val (a, b) = cbi.slotted(ct)
+        val (t, pos, rot, _, _) = a
+        val (t2, pos2, rot2, _, _) = b
         val x = pos.x.toFloat()
         val y = pos.y.toFloat()
 
@@ -149,10 +172,14 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
                 x + p3.x.toFloat(),
                 y + p3.y.toFloat())
 
+        shapeRenderer.circle(pos2.x.toFloat(), pos2.y.toFloat(), 20.0f)
+
         // Render calculated positions
         val samples = cbi.calculated(from = ct - tracer).values
         samples.windowed(2) { l ->
-            val (l1, l2) = l
+            val (ls1, ls2) = l
+            val (l1) = ls1
+            val (l2) = ls2
 
             val c1 = Color.BLUE.cpy().lerp(Color.GREEN, ((l1.t - (ct - tracer)) / tracer).toFloat())
             val c2 = Color.BLUE.cpy().lerp(Color.GREEN, ((l2.t - (ct - tracer)) / tracer).toFloat())
@@ -405,18 +432,6 @@ class Main(game: Game) : StageScreen<Game>(game) {
                         lastSometimes = time
                         csom = true
                     }
-
-                    batch.end()
-                    shapeRenderer.begin()
-                    shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
-                    shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
-                    shapeRenderer.color = Color.WHITE
-
-                    for ((p, _, r) in stars)
-                        shapeRenderer.circle(p.x.toFloat(), p.y.toFloat(), r.toFloat())
-
-                    shapeRenderer.end()
-                    batch.begin()
 
                     for (e in container.index.values.toList()) {
                         if (e is Drawable)
