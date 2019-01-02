@@ -1,20 +1,14 @@
-package eu.metatools.kepler
+package eu.metatools.kepler.tools
 
+import eu.metatools.kepler.math.Lerp
+import kotlinx.serialization.Serializable
 import org.apache.commons.math3.util.FastMath.*
-
-// Note: R and toR are used to allow moving quickly to other data types by changing conversion and type.
-
-
-/**
- * Converts a double array to a vector.
- */
-fun DoubleArray.toVec(offset: Int = 0) = Vec(get(offset), get(offset + 1))
-
 
 /**
  * Two dimensional vector class.
  */
-data class Vec(val x: Double, val y: Double) {
+@Serializable
+data class Vec(val x: Double, val y: Double) : Iterable<Double>, Lerp<Vec> {
     /**
      * Constructs a vector from arbitrary scalars as components [x] and [y].
      */
@@ -165,25 +159,21 @@ data class Vec(val x: Double, val y: Double) {
     val angle by lazy { atan2(y, x) }
 
     /**
+     * Returns the iterator for this vector.
+     */
+    override fun iterator() =
+            listOf(x, y).iterator()
+
+    override fun lerp(to: Vec, x: Double) =
+            (1.0 - x).let { ix ->
+                Vec(this.x * ix + to.x * x, this.y * ix + to.y * x)
+            }
+
+    /**
      * Formats the vector.
      */
     override fun toString() =
             "($x, $y)"
-
-    /**
-     * Copies the vector to an array, respects boundaries.
-     */
-    fun copyTo(array: DoubleArray) =
-            when (array.size) {
-                0 -> Unit
-                1 -> {
-                    array[0] = x
-                }
-                else -> {
-                    array[0] = x
-                    array[1] = y
-                }
-            }
 }
 
 /**
@@ -199,3 +189,23 @@ operator fun Number.times(vec: Vec) =
         toDouble().let {
             Vec(vec.x * it, vec.y * it)
         }
+
+/**
+ * Vector component subscript.
+ */
+val Vec.xx get() = Vec(x, x)
+
+/**
+ * Vector component subscript.
+ */
+val Vec.xy get() = Vec(x, y)
+
+/**
+ * Vector component subscript.
+ */
+val Vec.yx get() = Vec(y, x)
+
+/**
+ * Vector component subscript.
+ */
+val Vec.yy get() = Vec(y, y)
