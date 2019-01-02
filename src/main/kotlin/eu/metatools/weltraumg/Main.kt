@@ -9,8 +9,12 @@ import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
 import eu.metatools.kepler.Gravity
 import eu.metatools.kepler.Local
-import eu.metatools.kepler.Vec
-import eu.metatools.kepler.dgl.*
+import eu.metatools.kepler.dgl.Context
+import eu.metatools.kepler.dgl.ContinuousIntegrator
+import eu.metatools.kepler.dgl.NBodySimulation
+import eu.metatools.kepler.dgl.slotted
+import eu.metatools.kepler.math.DiscreteCoupling
+import eu.metatools.kepler.tools.Vec
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -86,8 +90,11 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
     val obs: NBodySimulation = NBodySimulation(2).apply {
         effects.apply {
             addAcc {
-                it.second.fold(Vec.zero) { l, r ->
-                    l + Gravity.acc(r.pos, 1e+16, pos)
+                it.second.foldIndexed(Vec.zero) { i, l, r ->
+                    if (i == it.first)
+                        l
+                    else
+                        l + Gravity.acc(r.pos, if (i == 1) 1e+16 else 1.0, pos)
                 }
             }
 
@@ -203,9 +210,9 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
 
     val owner by key(owner)
 
-    val prograde = Coupling(0.0, invalidating = cbi::reset)
+    val prograde = DiscreteCoupling(0.0, invalidating = cbi::reset)
 
-    val lateral = Coupling(0.0, invalidating = cbi::reset)
+    val lateral = DiscreteCoupling(0.0, invalidating = cbi::reset)
 
     val right by impulse { ->
         lateral[container.seconds()] = -1.0

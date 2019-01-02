@@ -1,6 +1,6 @@
 package eu.metatools.kepler.dgl
 
-import eu.metatools.kepler.Vec
+import eu.metatools.kepler.tools.Vec
 import org.apache.commons.math3.ode.AbstractIntegrator
 import org.apache.commons.math3.ode.FirstOrderConverter
 import org.apache.commons.math3.ode.SecondOrderDifferentialEquations

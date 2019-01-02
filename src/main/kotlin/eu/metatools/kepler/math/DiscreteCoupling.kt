@@ -1,15 +1,14 @@
-package eu.metatools.kepler.dgl
+package eu.metatools.kepler.math
 
-import eu.metatools.kepler.discreteSmooth
 import java.util.*
 
 /**
  * Couples a settable map with discretization via [discreteSmooth].
  */
-class Coupling(val initialValue: Double,
-               val width: Double = 0.1,
-               val invalidating: (Double) -> Unit = {},
-               val invalidated: (Double) -> Unit = {}) {
+class DiscreteCoupling(val initialValue: Double,
+                       val width: Double = 0.1,
+                       val invalidating: (Double) -> Unit = {},
+                       val invalidated: (Double) -> Unit = {}) {
     /**
      * Activation values.
      */

@@ -1,6 +1,6 @@
 package eu.metatools.kepler.dgl
 
-import eu.metatools.kepler.Vec
+import eu.metatools.kepler.tools.Vec
 import kotlin.properties.Delegates
 
 class EffectCompiler<T, U> {

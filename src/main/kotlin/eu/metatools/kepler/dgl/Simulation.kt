@@ -1,9 +1,9 @@
 package eu.metatools.kepler.dgl
 
 import eu.metatools.kepler.Gravity
-import eu.metatools.kepler.Vec
-import eu.metatools.kepler.addMulti
-import eu.metatools.kepler.plot
+import eu.metatools.kepler.tools.Vec
+import eu.metatools.kepler.tools.addMulti
+import eu.metatools.kepler.tools.plot
 import org.apache.commons.math3.ode.AbstractIntegrator
 import org.apache.commons.math3.ode.nonstiff.DormandPrince853Integrator
 

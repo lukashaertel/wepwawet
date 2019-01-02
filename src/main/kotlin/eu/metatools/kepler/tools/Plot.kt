@@ -1,4 +1,4 @@
-package eu.metatools.kepler
+package eu.metatools.kepler.tools
 
 
 import com.panayotis.gnuplot.JavaPlot
@@ -46,9 +46,15 @@ interface PlotDSL {
     fun addMulti(labels: Map<Int, String>, function: (Double) -> DoubleArray)
 }
 
+/**
+ * Plot a vector function.
+ */
 fun PlotDSL.addMulti(labels: List<String>, function: (Double) -> DoubleArray) =
         addMulti(labels.withIndex().associate { (it.index + 1) to it.value }, function)
 
+/**
+ * Plot a vector function.
+ */
 fun PlotDSL.addMulti(function: (Double) -> DoubleArray) =
         addMulti(emptyMap(), function)
 
@@ -99,7 +105,7 @@ private val plotLock = Semaphore(1)
 /**
  * Start a plot configuration and plots after configuring. Non-blocking, run in non-daemon thread.
  */
-fun plot(resolution: Int = 1024, extend: Extend = Extend.default, config: PlotDSL.() -> Unit) {
+fun plot(resolution: Int = 256, extend: Extend = Extend.default, config: PlotDSL.() -> Unit) {
     // Create plot to configure.
     val plot = JavaPlot()
     plot.setKey(JavaPlot.Key.TOP_LEFT)
