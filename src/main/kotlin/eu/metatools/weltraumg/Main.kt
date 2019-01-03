@@ -9,11 +9,8 @@ import com.badlogic.gdx.scenes.scene2d.Actor
 import com.badlogic.gdx.scenes.scene2d.Stage
 import eu.metatools.kepler.Gravity
 import eu.metatools.kepler.Local
-import eu.metatools.kepler.dgl.Context
-import eu.metatools.kepler.dgl.ContinuousIntegrator
-import eu.metatools.kepler.dgl.NBodySimulation
-import eu.metatools.kepler.dgl.slotted
 import eu.metatools.kepler.math.DiscreteCoupling
+import eu.metatools.kepler.simulator.*
 import eu.metatools.kepler.tools.Vec
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
@@ -28,7 +25,7 @@ import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.scene2d.button
 import ktx.scene2d.label
-import org.apache.commons.math3.ode.nonstiff.DormandPrince853Integrator
+import org.apache.commons.math3.util.FastMath.sqrt
 import org.jgroups.Global
 import org.jgroups.Message
 import java.io.*
@@ -64,93 +61,59 @@ interface Frequent : Periodic
  */
 interface Sometimes : Periodic
 
-/**
- * Root object of the game.
- */
-class Root(container: Container) : Entity(container) {
-    val spawn by impulse { owner: Author ->
-        create(::Player, owner)
-    }
-}
-
-val tracer = 240.0
-
 interface TimeInvalidated {
     fun invalidate(currentTime: Double)
 }
 
-
 /**
- * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
+ * Root object of the game.
  */
-class Player(container: Container, owner: Author) : Entity(container), Drawable, TimeInvalidated {
-
-    val all get() = container.findAuto<Root>()
-
-    val obs: NBodySimulation = NBodySimulation(2).apply {
-        effects.apply {
-            addAcc {
-                it.second.foldIndexed(Vec.zero) { i, l, r ->
-                    if (i == it.first)
-                        l
-                    else
-                        l + Gravity.acc(r.pos, if (i == 1) 1e+16 else 1.0, pos)
-                }
-            }
-
-            addAcc {
-                if (it.first == 0)
-                    Local.acc(1.0, rot, Vec.right * 30.0 * prograde[t])
-                else
-                    Vec.zero
-            }
-
-            addAcc {
-                if (it.first == 0)
-                    Local.acc(1.0, rot, Vec.up * lateral[t])
-                else
-                    Vec.zero
-            }
-
-            addAcc {
-                if (it.first == 0)
-                    Local.acc(1.0, rot, Vec.down * lateral[t])
-                else
-                    Vec.zero
-            }
-
-            addAccRot {
-                if (it.first == 0)
-                    Local.accRot(1.0, rot, Vec.right * 30.0 * prograde[t], Vec.zero)
-                else
-                    0.0
-            }
-
-            addAccRot {
-                if (it.first == 0)
-                    Local.accRot(1.0, rot, Vec.up * lateral[t], Vec.right)
-                else
-                    0.0
-            }
-
-            addAccRot {
-                if (it.first == 0)
-                    Local.accRot(1.0, rot, Vec.down * lateral[t], Vec.left)
-                else
-                    0.0
-            }
+class Root(container: Container) : Entity(container), Drawable, TimeInvalidated {
+    val simulator = Simulator(object : Universal {
+        override fun universal(on: EffectReceiver, other: List<Body>, t: Double) {
+            for (o in other)
+                if ((o.pos - on.pos).squaredLength > 5.0 * 5.0)
+                    on.accPos(Gravity.acc(o.pos, o.mass, on.pos))
         }
+    })
 
-    }
 
-    val dpi = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-10, 1.0e-10)
+    val reg: Registration = simulator.register(object : Definition {
+        override val bounds: Double
+            get() = 20.0
+        override val hull: List<Vec>
+            get() = emptyList()
+        override val pos: Vec
+            get() = Vec(300, 300)
+        override val rot: Double
+            get() = 0.0
+        override val com: Vec
+            get() = Vec.zero
+        override val mass: Double
+            get() = 1e15
+        override val posDot: Vec
+            get() = Vec.zero
+        override val rotDot: Double
+            get() = 0.0
+        override val comDot: Vec
+            get() = Vec.zero
+        override val massDot: Double
+            get() = 0.0
 
-    val cbi = ContinuousIntegrator(obs, dpi, listOf(
-            Context(container.seconds(), Vec(400.0, 300.0), 0.0, Vec(0.0, 0.0), 0.0),
-            Context(container.seconds(), Vec(600.0, 500.0), 0.0, Vec(0.0, 0.0), 0.0)))
+        override val time: Double
+            get() = container.seconds()
+
+        override fun local(on: EffectReceiver, t: Double) {
+
+        }
+    })
 
     override fun invalidate(currentTime: Double) {
-        cbi.drop(currentTime - tracer)
+        simulator.drop(currentTime - 10.0)
+    }
+
+    val spawn by impulse { owner: Author ->
+        create(::Player, owner)
     }
 
     override fun draw(batch: Batch, parentAlpha: Float) {
@@ -160,17 +123,78 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
         shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
         shapeRenderer.color = Color.WHITE
 
-        val ct = container.seconds()
-        val (a, b) = cbi.slotted(ct)
-        val (t, pos, rot, _, _) = a
-        val (t2, pos2, rot2, _, _) = b
-        val x = pos.x.toFloat()
-        val y = pos.y.toFloat()
+        val x = reg.pos.x.toFloat()
+        val y = reg.pos.y.toFloat()
 
         // Render ship triangle
-        val p1 = (Vec.left + Vec.up).times(10.0).rotate(rot)
-        val p2 = (Vec.right).times(15.0).rotate(rot)
-        val p3 = (Vec.left + Vec.down).times(10.0).rotate(rot)
+        shapeRenderer.circle(x, y, reg.bounds.toFloat())
+
+        shapeRenderer.end()
+        batch.begin()
+    }
+
+}
+
+
+/**
+ * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
+ */
+class Player(container: Container, owner: Author) : Entity(container), Drawable {
+
+    val all get() = container.findAuto<Root>()
+
+    val reg: Registration = all!!.simulator.register(object : Definition {
+        override val bounds: Double
+            get() = 5.0
+        override val hull: List<Vec>
+            get() = emptyList()
+        override val pos: Vec
+            get() = Vec(50, 50)
+        override val rot: Double
+            get() = 0.0
+        override val com: Vec
+            get() = Vec.zero
+        override val mass: Double
+            get() = 1.0
+        override val posDot: Vec
+            get() = Vec.right * 10.0
+        override val rotDot: Double
+            get() = 0.0
+        override val comDot: Vec
+            get() = Vec.zero
+        override val massDot: Double
+            get() = 0.0
+
+        override val time: Double
+            get() = container.seconds()
+
+
+        override fun local(on: EffectReceiver, t: Double) {
+            on.accPos(Local.acc(on.mass, on.rot, Vec.right * 30.0 * prograde[t]))
+//            on.accPos(Local.acc(on.mass, on.rot, Vec.down * lateral[t]))
+//            on.accPos(Local.acc(on.mass, on.rot, Vec.up * lateral[t]))
+
+            on.accRot(Local.accRot(on.mass, on.rot, Vec.down * lateral[t], Vec.left))
+            on.accRot(Local.accRot(on.mass, on.rot, Vec.up * lateral[t], Vec.right))
+        }
+    })
+
+
+    override fun draw(batch: Batch, parentAlpha: Float) {
+        batch.end()
+        shapeRenderer.begin()
+        shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
+        shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
+        shapeRenderer.color = Color.WHITE
+
+        val x = reg.pos.x.toFloat()
+        val y = reg.pos.y.toFloat()
+        val rot = reg.rot
+
+        // Render ship triangle
+        val p1 = (Vec.left + Vec.up).times(reg.bounds / sqrt(2.0)).rotate(rot)
+        val p2 = (Vec.right).times(reg.bounds).rotate(rot)
+        val p3 = (Vec.left + Vec.down).times(reg.bounds / sqrt(2.0)).rotate(rot)
         shapeRenderer.triangle(
                 x + p1.x.toFloat(),
                 y + p1.y.toFloat(),
@@ -178,31 +202,29 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
                 y + p2.y.toFloat(),
                 x + p3.x.toFloat(),
                 y + p3.y.toFloat())
-
-        shapeRenderer.circle(pos2.x.toFloat(), pos2.y.toFloat(), 20.0f)
-
-        // Render calculated positions
-        val samples = cbi.calculated(from = ct - tracer).values
-        samples.windowed(2) { l ->
-            val (ls1, ls2) = l
-            val (l1) = ls1
-            val (l2) = ls2
-
-            val c1 = Color.BLUE.cpy().lerp(Color.GREEN, ((l1.t - (ct - tracer)) / tracer).toFloat())
-            val c2 = Color.BLUE.cpy().lerp(Color.GREEN, ((l2.t - (ct - tracer)) / tracer).toFloat())
-
-            val pn = l1.pos + Vec.right.rotate(l1.rot) * 10.0
-
-            shapeRenderer.line(
-                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
-                    c1, c2)
-
-            shapeRenderer.line(
-                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-                    pn.x.toFloat(), pn.y.toFloat(),
-                    c1, c1.cpy().lerp(Color.BLACK, 0.5f))
-        }
+//
+//        // Render calculated positions
+//        val samples = cbi.calculated(from = ct - tracer).values
+//        samples.windowed(2) { l ->
+//            val (ls1, ls2) = l
+//            val (l1) = ls1
+//            val (l2) = ls2
+//
+//            val c1 = Color.BLUE.cpy().lerp(Color.GREEN, ((l1.t - (ct - tracer)) / tracer).toFloat())
+//            val c2 = Color.BLUE.cpy().lerp(Color.GREEN, ((l2.t - (ct - tracer)) / tracer).toFloat())
+//
+//            val pn = l1.pos + Vec.right.rotate(l1.rot) * 10.0
+//
+//            shapeRenderer.line(
+//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+//                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
+//                    c1, c2)
+//
+//            shapeRenderer.line(
+//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
+//                    pn.x.toFloat(), pn.y.toFloat(),
+//                    c1, c1.cpy().lerp(Color.BLACK, 0.5f))
+//        }
 
         shapeRenderer.end()
         batch.begin()
@@ -210,9 +232,9 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable,
 
     val owner by key(owner)
 
-    val prograde = DiscreteCoupling(0.0, invalidating = cbi::reset)
+    val prograde = DiscreteCoupling(0.0) { reg.notifyChange() }
 
-    val lateral = DiscreteCoupling(0.0, invalidating = cbi::reset)
+    val lateral = DiscreteCoupling(0.0) { reg.notifyChange() }
 
     val right by impulse { ->
         lateral[container.seconds()] = -1.0
@@ -342,6 +364,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
         // Reset history and entity.
         history = History(listOf())
+        container.revise(System.currentTimeMillis())
         root = container.init(::Root)
 
         // Trigger getting the game state.

@@ -95,13 +95,13 @@ interface EffectReceiver : Body {
 }
 
 /**
- * Global effect specification on single bodies with respect to N other bodies..
+ * Universal effect specification on single bodies with respect to N other bodies..
  */
-interface Global {
+interface Universal {
     /**
      * Apply N body effect on the receiver with [other] as the context.
      */
-    fun global(on: EffectReceiver, other: List<Body>, t: Double)
+    fun universal(on: EffectReceiver, other: List<Body>, t: Double)
 }
 
 /**
@@ -206,17 +206,19 @@ private fun DoubleArray.addMass(n: Int, acc: Double) {
 
 /**
  *
- * @property global The global effects, e.g., directional acceleration, massive bodies.
+ * @property universal The universal effects, e.g., directional acceleration, massive bodies.
  * @property integrator The integrator to use for evaluating the differential equations.
  * @property capacity Capacity of simulation.
  * @property resolution The time slotting resolution. Only multiples of this will be simulated, other points of time
  * are interpolated instead.
  */
 class Simulator(
-        val global: Global,
+        val universal: Universal,
         val integrator: AbstractIntegrator = defaultIntegrator,
         val capacity: Int = defaultCapacity,
         val resolution: Double = defaultResolution) {
+    // TODO: Initial time =!= last backing time.
+
     /**
      * List of all bodies in the simulation.
      */
@@ -276,6 +278,7 @@ class Simulator(
                                 get() = c.points[it].bounds
                             override val hull: List<Vec>
                                 get() = c.points[it].hull
+
                             override val pos: Vec
                                 get() = currentY.pos(it)
                             override val rot: Double
@@ -284,6 +287,7 @@ class Simulator(
                                 get() = currentY.com(it)
                             override val mass: Double
                                 get() = currentY.mass(it)
+
                             override val posDot: Vec
                                 get() = currentYDot.pos(it)
                             override val rotDot: Double
@@ -317,14 +321,17 @@ class Simulator(
                         currentYDot = yDot
                         currentYDDot = yDDot
 
+                        // Reset derivative.
+                        yDDot.fill(0.0)
+
                         // Run local simulation for all bodies.
                         c.points.forEachIndexed { i, s ->
                             s.definition.local(bodies[i], t)
                         }
 
-                        // Run global simulation for all bodies.
+                        // Run universal simulation for all bodies.
                         bodies.forEachIndexed { i, e ->
-                            global.global(e, bodies.skipItem(i), t)
+                            universal.universal(e, bodies.skipItem(i), t)
                         }
                     }
                 })
@@ -370,7 +377,6 @@ class Simulator(
                             Vec(y[(size + i) * components + 3], y[(size + i) * components + 4]),
                             y[(size + i) * components + 5])
                 }
-
             }
         }
     }
@@ -433,7 +439,7 @@ class Simulator(
                 if (t <= initialTime)
                     initialStatus
                 else
-                    backing.floorEntry(t)?.value ?: initialStatus
+                    backing[t] ?: initialStatus
 
         override fun getPoint() = lastStatus.pos.let {
             doubleArrayOf(it.x, it.y)
@@ -545,8 +551,8 @@ class Simulator(
 
 fun main(args: Array<String>) {
 
-    val sim = Simulator(object : Global {
-        override fun global(on: EffectReceiver, other: List<Body>, t: Double) {
+    val sim = Simulator(object : Universal {
+        override fun universal(on: EffectReceiver, other: List<Body>, t: Double) {
             for (o in other)
                 if ((o.pos - on.pos).squaredLength > 50.0)
                     on.accPos(Gravity.acc(o.pos, o.mass, on.pos))
@@ -613,11 +619,40 @@ fun main(args: Array<String>) {
         }
     })
 
+    val ship2 = sim.register(object : Definition {
+        override val time: Double
+            get() = time
+
+        override val bounds: Double
+            get() = 3.0
+        override val hull: List<Vec>
+            get() = emptyList()
+        override val pos: Vec
+            get() = Vec.up * 400.0
+        override val rot: Double
+            get() = 0.0
+        override val com: Vec
+            get() = Vec.zero
+        override val mass: Double
+            get() = 1.0
+        override val posDot: Vec
+            get() = Vec.left * 100.0
+        override val rotDot: Double
+            get() = 0.0
+        override val comDot: Vec
+            get() = Vec.zero
+        override val massDot: Double
+            get() = 0.0
+
+        override fun local(on: EffectReceiver, t: Double) {
+        }
+    })
+
     plot {
         range(0.0, 12.0)
-        addMulti(listOf("x1", "y1", "x2", "y2")) {
+        addMulti(listOf("x1", "y1", "x2", "y2", "x3", "y3")) {
             time = it
-            doubleArrayOf(star.pos.x, star.pos.y, ship.pos.x, ship.pos.y)
+            doubleArrayOf(star.pos.x, star.pos.y, ship.pos.x, ship.pos.y, ship2.pos.x, ship2.pos.y)
         }
     }
 
