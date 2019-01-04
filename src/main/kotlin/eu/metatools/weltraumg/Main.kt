@@ -65,11 +65,11 @@ interface TimeInvalidated {
     fun invalidate(currentTime: Double)
 }
 
-fun EffectReceiver.gravity(from: Body) {
+fun Receiver.gravity(from: Body) {
     accPos(Gravity.acc(from.pos, from.mass, pos))
 }
 
-fun EffectReceiver.local(force: Vec, pos: Vec) {
+fun Receiver.local(force: Vec, pos: Vec) {
     accPos(Local.acc(mass, rot, force))
     accRot(Local.accRot(mass, rot, force, pos - com))
 }
@@ -141,7 +141,7 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
         override val time: Double
             get() = container.seconds()
 
-        override fun local(on: EffectReceiver, t: Double) {
+        override fun local(on: Receiver, t: Double) {
             on.local(Vec.right * 30.0 * prograde[t] * shipFactor, Vec.zero)
             on.local(Vec.down * lateral[t] * shipFactor, Vec.left)
             on.local(Vec.up * lateral[t] * shipFactor, Vec.right)
