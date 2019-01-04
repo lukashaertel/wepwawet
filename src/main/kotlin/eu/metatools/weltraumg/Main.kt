@@ -65,48 +65,35 @@ interface TimeInvalidated {
     fun invalidate(currentTime: Double)
 }
 
+fun EffectReceiver.gravity(from: Body) {
+    accPos(Gravity.acc(from.pos, from.mass, pos))
+}
+
+fun EffectReceiver.local(force: Vec, pos: Vec) {
+    accPos(Local.acc(mass, rot, force))
+    accRot(Local.accRot(mass, rot, force, pos - com))
+}
+
 /**
  * Root object of the game.
  */
-class Root(container: Container) : Entity(container), Drawable, TimeInvalidated {
+class Root(container: Container) : Entity(container)/*, Drawable*/, TimeInvalidated {
     val simulator = Simulator(object : Universal {
         override fun universal(on: EffectReceiver, other: List<Body>, t: Double) {
             for (o in other)
                 if ((o.pos - on.pos).squaredLength > 5.0 * 5.0)
-                    on.accPos(Gravity.acc(o.pos, o.mass, on.pos))
+                    on.gravity(o)
         }
     })
 
-
-    val reg: Registration = simulator.register(object : Definition {
-        override val bounds: Double
-            get() = 20.0
-        override val hull: List<Vec>
-            get() = emptyList()
-        override val pos: Vec
-            get() = Vec(300, 300)
-        override val rot: Double
-            get() = 0.0
-        override val com: Vec
-            get() = Vec.zero
-        override val mass: Double
-            get() = 1e15
-        override val posDot: Vec
-            get() = Vec.zero
-        override val rotDot: Double
-            get() = 0.0
-        override val comDot: Vec
-            get() = Vec.zero
-        override val massDot: Double
-            get() = 0.0
-
-        override val time: Double
-            get() = container.seconds()
-
-        override fun local(on: EffectReceiver, t: Double) {
-
-        }
-    })
+//
+//    val reg: Registration = simulator.register(object : Definition(
+//            bounds = 20.0,
+//            pos = Vec(300, 300),
+//            mass = 1e16) {
+//        override val time: Double
+//            get() = container.seconds()
+//    })
 
     override fun invalidate(currentTime: Double) {
         simulator.drop(currentTime - 10.0)
@@ -115,25 +102,28 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
     val spawn by impulse { owner: Author ->
         create(::Player, owner)
     }
-
-    override fun draw(batch: Batch, parentAlpha: Float) {
-        batch.end()
-        shapeRenderer.begin()
-        shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
-        shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
-        shapeRenderer.color = Color.WHITE
-
-        val x = reg.pos.x.toFloat()
-        val y = reg.pos.y.toFloat()
-
-        // Render ship triangle
-        shapeRenderer.circle(x, y, reg.bounds.toFloat())
-
-        shapeRenderer.end()
-        batch.begin()
-    }
+//
+//    override fun draw(batch: Batch, parentAlpha: Float) {
+//        batch.end()
+//        shapeRenderer.begin()
+//        shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
+//        shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
+//        shapeRenderer.color = Color.WHITE
+//
+//        val x = reg.pos.x.toFloat()
+//        val y = reg.pos.y.toFloat()
+//
+//        // Render ship triangle
+//        shapeRenderer.circle(x, y, reg.bounds.toFloat())
+//
+//        shapeRenderer.end()
+//        batch.begin()
+//    }
 
 }
+
+
+const val shipFactor = 1.0
 
 
 /**
@@ -143,42 +133,21 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
 
     val all get() = container.findAuto<Root>()
 
-    val reg: Registration = all!!.simulator.register(object : Definition {
-        override val bounds: Double
-            get() = 5.0
-        override val hull: List<Vec>
-            get() = emptyList()
-        override val pos: Vec
-            get() = Vec(50, 50)
-        override val rot: Double
-            get() = 0.0
-        override val com: Vec
-            get() = Vec.zero
-        override val mass: Double
-            get() = 1.0
-        override val posDot: Vec
-            get() = Vec.right * 10.0
-        override val rotDot: Double
-            get() = 0.0
-        override val comDot: Vec
-            get() = Vec.zero
-        override val massDot: Double
-            get() = 0.0
-
+    val reg: Registration = all!!.simulator.register(object : Definition(
+            bounds = 5.0,
+            mass = 1.0 * shipFactor,
+            pos = Vec(50, 50),
+            posDot = Vec.right * 10
+    ) {
         override val time: Double
             get() = container.seconds()
 
-
         override fun local(on: EffectReceiver, t: Double) {
-            on.accPos(Local.acc(on.mass, on.rot, Vec.right * 30.0 * prograde[t]))
-//            on.accPos(Local.acc(on.mass, on.rot, Vec.down * lateral[t]))
-//            on.accPos(Local.acc(on.mass, on.rot, Vec.up * lateral[t]))
-
-            on.accRot(Local.accRot(on.mass, on.rot, Vec.down * lateral[t], Vec.left))
-            on.accRot(Local.accRot(on.mass, on.rot, Vec.up * lateral[t], Vec.right))
+            on.local(Vec.right * 30.0 * prograde[t] * shipFactor, Vec.zero)
+            on.local(Vec.down * lateral[t] * shipFactor, Vec.left)
+            on.local(Vec.up * lateral[t] * shipFactor, Vec.right)
         }
     })
-
 
     override fun draw(batch: Batch, parentAlpha: Float) {
         batch.end()
@@ -202,29 +171,6 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
                 y + p2.y.toFloat(),
                 x + p3.x.toFloat(),
                 y + p3.y.toFloat())
-//
-//        // Render calculated positions
-//        val samples = cbi.calculated(from = ct - tracer).values
-//        samples.windowed(2) { l ->
-//            val (ls1, ls2) = l
-//            val (l1) = ls1
-//            val (l2) = ls2
-//
-//            val c1 = Color.BLUE.cpy().lerp(Color.GREEN, ((l1.t - (ct - tracer)) / tracer).toFloat())
-//            val c2 = Color.BLUE.cpy().lerp(Color.GREEN, ((l2.t - (ct - tracer)) / tracer).toFloat())
-//
-//            val pn = l1.pos + Vec.right.rotate(l1.rot) * 10.0
-//
-//            shapeRenderer.line(
-//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-//                    l2.pos.x.toFloat(), l2.pos.y.toFloat(),
-//                    c1, c2)
-//
-//            shapeRenderer.line(
-//                    l1.pos.x.toFloat(), l1.pos.y.toFloat(),
-//                    pn.x.toFloat(), pn.y.toFloat(),
-//                    c1, c1.cpy().lerp(Color.BLACK, 0.5f))
-//        }
 
         shapeRenderer.end()
         batch.begin()
@@ -232,19 +178,7 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
 
     val owner by key(owner)
 
-    val prograde = DiscreteCoupling(0.0) { reg.notifyChange() }
-
-    val lateral = DiscreteCoupling(0.0) { reg.notifyChange() }
-
-    val right by impulse { ->
-        lateral[container.seconds()] = -1.0
-    }
-    val left by impulse { ->
-        lateral[container.seconds()] = 1.0
-    }
-    val stopR by impulse { ->
-        lateral[container.seconds()] = 0.0
-    }
+    val prograde = DiscreteCoupling(0.0, invalidating = reg::notifyChange)
 
     val fwd by impulse { ->
         prograde[container.seconds()] = 1.0
@@ -255,6 +189,18 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
     }
     val stop by impulse { ->
         prograde[container.seconds()] = 0.0
+    }
+
+    val lateral = DiscreteCoupling(0.0, invalidating = reg::notifyChange)
+
+    val right by impulse { ->
+        lateral[container.seconds()] = -1.0
+    }
+    val left by impulse { ->
+        lateral[container.seconds()] = 1.0
+    }
+    val stopR by impulse { ->
+        lateral[container.seconds()] = 0.0
     }
 }
 
@@ -364,7 +310,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
 
         // Reset history and entity.
         history = History(listOf())
-        container.revise(System.currentTimeMillis())
+        container.time = System.currentTimeMillis()
         root = container.init(::Root)
 
         // Trigger getting the game state.
@@ -382,6 +328,8 @@ class Main(game: Game) : StageScreen<Game>(game) {
             }
             load = null
         }
+
+        root.spawn(author)
     }
 
     override fun hide() {

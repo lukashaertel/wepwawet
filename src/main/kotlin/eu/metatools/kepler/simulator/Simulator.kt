@@ -107,16 +107,26 @@ interface Universal {
 /**
  * Initial value specification, time source and local effect on body.
  */
-interface Definition : Body {
+abstract class Definition(
+        override val bounds: Double = 1.0,
+        override val hull: List<Vec> = emptyList(),
+        override val pos: Vec = Vec.zero,
+        override val rot: Double = 0.0,
+        override val com: Vec = Vec.zero,
+        override val mass: Double = 1.0,
+        override val posDot: Vec = Vec.zero,
+        override val rotDot: Double = 0.0,
+        override val comDot: Vec = Vec.zero,
+        override val massDot: Double = 0.0) : Body {
     /**
      * Time source.
      */
-    val time: Double
+    abstract val time: Double
 
     /**
      * Apply local zero body effect on the receiver.
      */
-    fun local(on: EffectReceiver, t: Double)
+    open fun local(on: EffectReceiver, t: Double) = Unit
 }
 
 /**
@@ -126,9 +136,10 @@ interface Registration : Body {
     /**
      * Notifies a change at the [Definition]s time source value.
      */
-    fun notifyChange()
+    fun notifyChange(t: Double)
 
     /**
+     * // TODO Verify
      * Unregisters the object.
      */
     fun unregister()
@@ -147,7 +158,7 @@ const val defaultResolution = 0.05
 /**
  * The default capacity to use.
  */
-const val defaultCapacity = 20
+const val defaultCapacity = 40
 
 /**
  * Number of components in a compressed array.
@@ -217,7 +228,6 @@ class Simulator(
         val integrator: AbstractIntegrator = defaultIntegrator,
         val capacity: Int = defaultCapacity,
         val resolution: Double = defaultResolution) {
-    // TODO: Initial time =!= last backing time.
 
     /**
      * List of all bodies in the simulation.
@@ -402,13 +412,13 @@ class Simulator(
         /**
          * Initialization time.
          */
-        private val initialTime =
+        val initialTime =
                 definition.time
 
         /**
          * Initialization values.
          */
-        private val initialStatus =
+        val initialStatus =
                 Status(definition.pos,
                         definition.rot,
                         definition.com,
@@ -475,8 +485,8 @@ class Simulator(
         override val massDot: Double
             get() = evaluate(definition.time, Status::massDot, ::lerp)
 
-        override fun notifyChange() {
-            reset(definition.time)
+        override fun notifyChange(t: Double) {
+            reset(t)
         }
 
         override fun unregister() {
@@ -524,7 +534,8 @@ class Simulator(
     fun register(definition: Definition): Registration =
             SimulatorRegistration(definition).also {
                 // Reset all other bodies.
-                reset(definition.time)
+                reset(it.initialTime)
+                integrateIfAbsent(it.initialTime)
 
                 // Add the new registration.
                 bodies += it
@@ -561,91 +572,28 @@ fun main(args: Array<String>) {
 
     var time = 0.0
 
-    val star = sim.register(object : Definition {
+    val star = sim.register(object : Definition(
+            bounds = 20.0,
+            mass = 1e13) {
         override val time: Double
             get() = time
-
-        override val bounds: Double
-            get() = 20.0
-        override val hull: List<Vec>
-            get() = emptyList()
-        override val pos: Vec
-            get() = Vec.zero
-        override val rot: Double
-            get() = 0.0
-        override val com: Vec
-            get() = Vec.zero
-        override val mass: Double
-            get() = 1e13
-        override val posDot: Vec
-            get() = Vec.zero
-        override val rotDot: Double
-            get() = 0.0
-        override val comDot: Vec
-            get() = Vec.zero
-        override val massDot: Double
-            get() = 0.0
-
-        override fun local(on: EffectReceiver, t: Double) {
-        }
     })
 
-    val ship = sim.register(object : Definition {
+    val ship = sim.register(object : Definition(
+            bounds = 3.0,
+            pos = Vec.right * 400,
+            posDot = Vec.up * 100) {
         override val time: Double
             get() = time
-
-        override val bounds: Double
-            get() = 3.0
-        override val hull: List<Vec>
-            get() = emptyList()
-        override val pos: Vec
-            get() = Vec.right * 400.0
-        override val rot: Double
-            get() = 0.0
-        override val com: Vec
-            get() = Vec.zero
-        override val mass: Double
-            get() = 1.0
-        override val posDot: Vec
-            get() = Vec.up * 100.0
-        override val rotDot: Double
-            get() = 0.0
-        override val comDot: Vec
-            get() = Vec.zero
-        override val massDot: Double
-            get() = 0.0
-
-        override fun local(on: EffectReceiver, t: Double) {
-        }
     })
 
-    val ship2 = sim.register(object : Definition {
+    val ship2 = sim.register(object : Definition(
+            bounds = 3.0,
+            pos = Vec.up * 400,
+            posDot = Vec.left * 100
+    ) {
         override val time: Double
             get() = time
-
-        override val bounds: Double
-            get() = 3.0
-        override val hull: List<Vec>
-            get() = emptyList()
-        override val pos: Vec
-            get() = Vec.up * 400.0
-        override val rot: Double
-            get() = 0.0
-        override val com: Vec
-            get() = Vec.zero
-        override val mass: Double
-            get() = 1.0
-        override val posDot: Vec
-            get() = Vec.left * 100.0
-        override val rotDot: Double
-            get() = 0.0
-        override val comDot: Vec
-            get() = Vec.zero
-        override val massDot: Double
-            get() = 0.0
-
-        override fun local(on: EffectReceiver, t: Double) {
-        }
     })
 
     plot {
