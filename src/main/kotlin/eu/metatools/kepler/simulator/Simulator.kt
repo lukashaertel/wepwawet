@@ -40,12 +40,12 @@ class Simulator(
         /**
          * Origin cell.
          */
-        val cellOrigin: Int = definition.time.toCell()
+        val cellOrigin: Int get() = valuations.firstKey()
 
         /**
          * Valuations of the registration. Indices are relative to origin cell.
          */
-        val valuations = TreeMap<Int, Status>(mapOf(cellOrigin to definition.toStatus()))
+        val valuations = TreeMap<Int, Status>(mapOf(definition.time.toCell() to definition.toStatus()))
 
         /**
          * Cell at which the registration is shelved. Shelved objects still have effects during their lifetime but will
@@ -335,5 +335,31 @@ class Simulator(
         // Add and return the registration.
         regs += reg
         return reg
+    }
+
+    /**
+     * Releases all values and registrations that are not needed to get the values at point [t].
+     */
+    fun release(t: Double) {
+        // Get cell to which to release.
+        val c = t.toCell()
+
+        // Track the shelve drop cell.
+        var shelveDrop = Int.MAX_VALUE
+
+        // Release in all registrations.
+        for (r in regs) {
+            // Get the next potential base for the given cell.
+            val base = r.valuations.floorKey(c)
+
+            // If there is a new base, drop all values before that and mark new shelve drop.
+            if (base != null) {
+                r.valuations.headMap(base, false).clear()
+                shelveDrop = min(shelveDrop, base)
+            }
+        }
+
+        // Remove all shelved registrations that are shelved before the minimum drop point.
+        regs.removeAll { it.cellShelved < shelveDrop }
     }
 }

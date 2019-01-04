@@ -89,13 +89,13 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
     val reg: Registration = simulator.register(object : Definition(
             bounds = 20.0,
             pos = Vec(300, 300),
-            mass = 1e16) {
+            mass = 1e15) {
         override val time: Double
             get() = container.seconds()
     })
 
     override fun invalidate(currentTime: Double) {
-        // simulator.drop(currentTime - 10.0)
+        simulator.release(currentTime - 10.0)
     }
 
     val spawn by impulse { owner: Author ->
@@ -122,8 +122,9 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
 }
 
 
-const val shipFactor = 1.0
+const val shipFactor = 1e14
 
+// TODO: Nachladen über serilalisierung
 
 /**
  * A player, spawn new one with 'B', move with 'ASDW', shoot at mouse cursor with left mouse button.
