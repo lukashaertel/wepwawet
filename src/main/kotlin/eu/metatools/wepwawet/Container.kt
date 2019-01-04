@@ -252,13 +252,15 @@ abstract class Container(val author: Author) {
     /**
      * Initializes the backing repository with the container, this is then the root for exchanging calls.
      */
-    fun <E : Entity> init(constructor: (Container) -> E): E {
-        return constructor(this).also {
-            registerEntity(it)
+    fun <E : Entity> init(sharedTime: Timestep, sharedAuthor: Author, constructor: (Container) -> E): E {
+        return subIn(sharedTime, Inner.MIN_VALUE, sharedAuthor) {
+            constructor(this).also {
+                registerEntity(it)
+            }
         }
     }
 
-    fun revise(targetTime: Long) {
+    fun revise(targetTime: Timestep) {
         time = targetTime
         repo.softUpper = Revision(targetTime, Inner.MAX_VALUE, Author.MAX_VALUE)
     }

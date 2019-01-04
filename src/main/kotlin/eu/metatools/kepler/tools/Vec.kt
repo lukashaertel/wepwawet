@@ -164,10 +164,19 @@ data class Vec(val x: Double, val y: Double) : Iterable<Double>, Lerp<Vec> {
     override fun iterator() =
             listOf(x, y).iterator()
 
+    /**
+     * Linear interpolation to vector [to] with [x] between zero and one.
+     */
     override fun lerp(to: Vec, x: Double) =
             (1.0 - x).let { ix ->
                 Vec(this.x * ix + to.x * x, this.y * ix + to.y * x)
             }
+
+    /**
+     * Converts the vector to a double array.
+     */
+    fun toArray() =
+            doubleArrayOf(x, y)
 
     /**
      * Formats the vector.

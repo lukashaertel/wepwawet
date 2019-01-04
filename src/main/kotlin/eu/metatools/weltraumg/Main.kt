@@ -77,48 +77,47 @@ fun EffectReceiver.local(force: Vec, pos: Vec) {
 /**
  * Root object of the game.
  */
-class Root(container: Container) : Entity(container)/*, Drawable*/, TimeInvalidated {
-    val simulator = Simulator(object : Universal {
-        override fun universal(on: EffectReceiver, other: List<Body>, t: Double) {
+class Root(container: Container) : Entity(container), Drawable, TimeInvalidated {
+    val simulator = NewSimulator(object : Universal {
+        override fun universal(on: Receiver, other: List<Body>, t: Double) {
             for (o in other)
                 if ((o.pos - on.pos).squaredLength > 5.0 * 5.0)
                     on.gravity(o)
         }
     })
 
-//
-//    val reg: Registration = simulator.register(object : Definition(
-//            bounds = 20.0,
-//            pos = Vec(300, 300),
-//            mass = 1e16) {
-//        override val time: Double
-//            get() = container.seconds()
-//    })
+    val reg: Registration = simulator.register(object : Definition(
+            bounds = 20.0,
+            pos = Vec(300, 300),
+            mass = 1e16) {
+        override val time: Double
+            get() = container.seconds()
+    })
 
     override fun invalidate(currentTime: Double) {
-        simulator.drop(currentTime - 10.0)
+        // simulator.drop(currentTime - 10.0)
     }
 
     val spawn by impulse { owner: Author ->
         create(::Player, owner)
     }
-//
-//    override fun draw(batch: Batch, parentAlpha: Float) {
-//        batch.end()
-//        shapeRenderer.begin()
-//        shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
-//        shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
-//        shapeRenderer.color = Color.WHITE
-//
-//        val x = reg.pos.x.toFloat()
-//        val y = reg.pos.y.toFloat()
-//
-//        // Render ship triangle
-//        shapeRenderer.circle(x, y, reg.bounds.toFloat())
-//
-//        shapeRenderer.end()
-//        batch.begin()
-//    }
+
+    override fun draw(batch: Batch, parentAlpha: Float) {
+        batch.end()
+        shapeRenderer.begin()
+        shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
+        shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
+        shapeRenderer.color = Color.WHITE
+
+        val x = reg.pos.x.toFloat()
+        val y = reg.pos.y.toFloat()
+
+        // Render ship triangle
+        shapeRenderer.circle(x, y, reg.bounds.toFloat())
+
+        shapeRenderer.end()
+        batch.begin()
+    }
 
 }
 
@@ -217,7 +216,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
     /**
      * History of this game screen.
      */
-    private var history = History(listOf())
+    private var history = History(0L, listOf())
 
     /**
      * Coder for the serializable classes.
@@ -271,7 +270,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
                     if (save)
                         coder.encode(autosaveStream, message)
 
-                    history = history.copy(history.calls + message)
+                    history = history.copy(calls = history.calls + message)
                     channel.send(null, message)
                 }
             }
@@ -280,10 +279,10 @@ class Main(game: Game) : StageScreen<Game>(game) {
         // Connect network to container.
         channel.valueReceiver = object : ValueReceiver {
             override fun receive(source: Message, message: Any?) {
-                when (message) {
-                    is Call -> {
-                        synchronized(container) {
-                            history = history.copy(history.calls + message)
+                synchronized(container) {
+                    when (message) {
+                        is Call -> {
+                            history = history.copy(calls = history.calls + message)
                             container.receive(message)
                         }
                     }
@@ -295,13 +294,7 @@ class Main(game: Game) : StageScreen<Game>(game) {
             }
 
             override fun setState(state: Any?) {
-                synchronized(container) {
-                    history = state as History
-                    for (call in history.calls) {
-                        container.receive(call)
-                        println("H>$call")
-                    }
-                }
+                history = state as History
             }
         }
 
@@ -309,12 +302,19 @@ class Main(game: Game) : StageScreen<Game>(game) {
         channel.connect("Cluster")
 
         // Reset history and entity.
-        history = History(listOf())
-        container.time = System.currentTimeMillis()
-        root = container.init(::Root)
+        history = History(System.currentTimeMillis(), listOf())
 
         // Trigger getting the game state.
         channel.getState(null, 10000)
+
+        // Initialize the root container
+        root = container.init(history.init, Author.MIN_VALUE, ::Root)
+
+        // Run all calls.
+        for (call in history.calls) {
+            container.receive(call)
+            println("H>$call")
+        }
 
         // If load file given, load into container.
         if (load != null && load!!.exists()) {
@@ -322,13 +322,16 @@ class Main(game: Game) : StageScreen<Game>(game) {
             synchronized(container) {
                 while (stream.available() > 0)
                     (coder.decode(stream) as? Call)?.let { message ->
-                        history = history.copy(history.calls + message)
+                        history = history.copy(calls = history.calls + message)
                         container.receive(message)
                     }
             }
+
             load = null
         }
 
+
+        container.time = System.currentTimeMillis()
         root.spawn(author)
     }
 

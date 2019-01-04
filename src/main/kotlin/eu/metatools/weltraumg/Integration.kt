@@ -19,7 +19,7 @@ data class Call(val timestep: Timestep,
  * History of all calls.
  */
 @Serializable
-data class History(val calls: List<Call>)
+data class History(val init: Timestep, val calls: List<Call>)
 
 /**
  * Receives the call in the container.
