@@ -78,7 +78,7 @@ fun Receiver.local(force: Vec, pos: Vec) {
  * Root object of the game.
  */
 class Root(container: Container) : Entity(container), Drawable, TimeInvalidated {
-    val simulator = NewSimulator(object : Universal {
+    val simulator = Simulator(object : Universal {
         override fun universal(on: Receiver, other: List<Body>, t: Double) {
             for (o in other)
                 if ((o.pos - on.pos).squaredLength > 5.0 * 5.0)

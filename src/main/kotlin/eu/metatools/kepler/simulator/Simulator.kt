@@ -1,133 +1,214 @@
 package eu.metatools.kepler.simulator
 
-import eu.metatools.kepler.Gravity
 import eu.metatools.kepler.math.lerp
 import eu.metatools.kepler.tools.Vec
-import eu.metatools.kepler.tools.addMulti
-import eu.metatools.kepler.tools.plot
+import eu.metatools.kepler.tools.cluster
 import eu.metatools.kepler.tools.skipItem
-import org.apache.commons.math3.ml.clustering.Clusterable
-import org.apache.commons.math3.ml.clustering.KMeansPlusPlusClusterer
 import org.apache.commons.math3.ode.AbstractIntegrator
 import org.apache.commons.math3.ode.FirstOrderConverter
 import org.apache.commons.math3.ode.SecondOrderDifferentialEquations
 import org.apache.commons.math3.ode.nonstiff.DormandPrince853Integrator
-import org.apache.commons.math3.util.FastMath.ceil
-import org.apache.commons.math3.util.FastMath.floor
+import org.apache.commons.math3.util.FastMath.*
 import java.util.*
-import kotlin.collections.component1
-import kotlin.collections.component2
-import kotlin.collections.set
+import kotlin.reflect.KProperty1
 
-/**
- * The default integrator to use.
- */
-val defaultIntegrator = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-8, 1.0e-8)
-
-/**
- * The default resolution to use.
- */
-const val defaultResolution = 0.05
-
-/**
- * The default capacity to use.
- */
-const val defaultCapacity = 40
-
-
-/**
- *
- * @property universal The universal effects, e.g., directional acceleration, massive bodies.
- * @property integrator The integrator to use for evaluating the differential equations.
- * @property capacity Capacity of simulation.
- * @property resolution The time slotting resolution. Only multiples of this will be simulated, other points of time
- * are interpolated instead.
- */
-@Deprecated("Not working")
 class Simulator(
         val universal: Universal,
-        val integrator: AbstractIntegrator = defaultIntegrator,
-        val capacity: Int = defaultCapacity,
-        val resolution: Double = defaultResolution) {
+        val k: Int = 4, val min: Int = 16,
+        val resolution: Double = 0.125,
+        val integrator: AbstractIntegrator = DormandPrince853Integrator(1.0e-8, 100.0, 1.0e-8, 1.0e-8)) {
 
     /**
-     * List of all bodies in the simulation.
+     * In the [resolution] based system, converts the time to a cell number.
      */
-    private val bodies = arrayListOf<SimulatorRegistration>()
+    private fun Double.toCell() = floor(this / resolution).toInt()
 
     /**
-     * Integrate to [t] if no value present.
+     * In the [resolution] based system, converts the time to the next cell number
      */
-    private fun integrateT(t: Double) {
-        // No body, already completed.
-        if (bodies.isEmpty())
-            return
+    private fun Double.toNextCell() = ceil(this / resolution).toInt()
 
-        val t0 = bodies.first().let {
-            it.backing.lastEntry()?.key ?: it.initialTime
+    /**
+     * In the [resolution] based system, cionverts the cell number to a time.
+     */
+    private fun Int.toTime() = this * resolution
+
+    /**
+     * Registration of a definition.
+     */
+    private inner class Reg(val definition: Definition) : Registration {
+        /**
+         * Origin cell.
+         */
+        val cellOrigin: Int = definition.time.toCell()
+
+        /**
+         * Valuations of the registration. Indices are relative to origin cell.
+         */
+        val valuations = TreeMap<Int, Status>(mapOf(cellOrigin to definition.toStatus()))
+
+        /**
+         * Cell at which the registration is shelved. Shelved objects still have effects during their lifetime but will
+         * not be simulated anymore after the shelved cell. This will preserve effects they had during their lifetime.
+         */
+        var cellShelved = Int.MAX_VALUE
+
+        // Static properties.
+        override val bounds get() = definition.bounds
+        override val hull get() = definition.hull
+
+        // Zeroth derivative of dynamic properties.
+        override val pos get() = eval(Status::pos, definition.time, Vec::lerp)
+        override val rot get() = eval(Status::rot, definition.time, ::lerp)
+        override val com get() = eval(Status::com, definition.time, Vec::lerp)
+        override val mass get() = eval(Status::mass, definition.time, ::lerp)
+
+        // First derivative of dynamic properties.
+        override val posDot get() = eval(Status::posDot, definition.time, Vec::lerp)
+        override val rotDot get() = eval(Status::rotDot, definition.time, ::lerp)
+        override val comDot get() = eval(Status::comDot, definition.time, Vec::lerp)
+        override val massDot get() = eval(Status::massDot, definition.time, ::lerp)
+
+        operator fun get(c: Int) =
+                when {
+                    c < cellOrigin ->
+                        throw IllegalArgumentException("Get before registration was created")
+                    cellShelved <= c ->
+                        throw IllegalArgumentException("Get after registration was shelved")
+                    else ->
+                        valuations[c]
+                                ?: throw IllegalArgumentException("Registration has no valuation for $c")
+                }
+
+
+        /**
+         * Evaluates the [property] at the time [t] interpolating (if needed) with [interpolate].
+         */
+        private inline fun <E> eval(property: KProperty1<Status, E>, t: Double, interpolate: (E, E, Double) -> E): E {
+            // Get cells for evaluated time.
+            val c1 = t.toCell()
+            val c2 = t.toNextCell()
+
+            // Check if cell on location or between.
+            if (c1 == c2) {
+                // Cell is on location, assert that it is exactly integrated.
+                assertIntegrated(c1)
+
+                // Get value of the property.
+                return property.get(get(c1))
+            } else {
+                // Cell is between location, assert that left and right locations are integrated.
+                assertIntegrated(c1)
+                assertIntegrated(c2)
+                // Get interpolation value.
+                val x = (t - c1.toTime()) / (c2.toTime() - c1.toTime())
+
+                // Interpolated value of left and right property.
+                return interpolate(
+                        property.get(get(c1)),
+                        property.get(get(c2)), x)
+            }
         }
 
-        integrateFromTo(t0, t)
+        override fun notifyChange(t: Double?) {
+            // Reset at given or definition time.
+            reset((t ?: definition.time).toCell())
+        }
+
+        override fun unregister(t: Double?) {
+            // Set shelved cell.
+            cellShelved = (t ?: definition.time).toCell()
+
+            // Also reset at that cell.
+            reset(cellShelved)
+        }
+
+        override fun toString() =
+                definition.toString()
     }
 
-    private fun consolidateUntil(t: Double) {
-        bodies.flatMap {
-            it.backing.headMap(t, true).keys
-        }.toSortedSet().windowed(2) { (a, b) ->
-            println("consolidating form $a to $b")
-            integrateFromTo(a, b)
+    /**
+     * Resets all valuations for the given cell number [c].
+     */
+    private fun reset(c: Int) {
+        // Remove all valuations that are not the origin valuation.
+        for (r in regs)
+            r.valuations.tailMap(max(r.cellOrigin + 1, c), true).clear()
+    }
+
+    /**
+     * Asserts that all valid bodies at cell number [c] have valuations.
+     */
+    private fun assertIntegrated(c: Int) {
+        // All addressable registrations at the given cell.
+        val addressable = regs.filter { it.cellOrigin < c }
+
+        // Check that there are objects that may be integrated.
+        if (addressable.isEmpty())
+            return
+
+        // Cells that were integrated on multiple bodies.
+        val common = addressable
+                .map { it.valuations.keys as Set<Int> }
+                .reduce { a, b -> a intersect b }
+
+        // Check for a common base cell for integration.
+        val base = common.max()
+        if (base != null) {
+            integrate(base, c)
+            return
+        }
+
+        // Get last new introduced body, assert integrated to that body, this will exclude this body. After
+        // integration, this cell will have values for this body as well. They might recursively require more steps. The
+        // method will terminate as at least one registration is excluded from the recursion.
+        val last = addressable.map { it.cellOrigin }.max()
+        if (last != null) {
+            assertIntegrated(last)
+            assertIntegrated(c)
+            return
         }
     }
 
-
     /**
-     * Integrates all bodies from [t0] to [t].
+     * Performs an integration of all registrations, must have valuations at [c0].
      */
-    private fun integrateFromTo(t0: Double, t: Double) {
-        // Select bodies that are active at the time.
-        val active = bodies.filter { it.initialTime <= t0 }
-
-        // If all bodies left at that time are already integrated, return.
-        if (active.all { it.backing.containsKey(t) })
+    private fun integrate(c0: Int, c: Int) {
+        // Do not integrate if the steps are the same.
+        if (c0 == c)
             return
 
-        // Set the simulated time for the active bodies.
-        for (b in active)
-            b.simulatedTime = t0
+        // Get all registrations to consider.
+        val consider = regs.filter { c0 in it.cellOrigin..it.cellShelved }
 
-        // Cluster to an appropriate size and integrate clusters individually.
-        val clusters = KMeansPlusPlusClusterer<SimulatorRegistration>(2 * bodies.size / capacity).cluster(active)
+        // Cluster those registrations in k clusters, if a certain number of elements is reached.
+        val clusters = consider.cluster(if (consider.size <= min) 1 else k) { it[c0].pos }
+
+        // Integrate all clusters individually.
         for (cluster in clusters)
-            integrateCluster(cluster.points, t0, t)
+            integrate(cluster.value, c0, c)
     }
 
     /**
-     * Integrates a part of all bodies clustered by [cluster] from [t0] to [t].
+     * Performs and integration of some registrations, must have valuations at [c0]
      */
-    private fun integrateCluster(cluster: List<SimulatorRegistration>, t0: Double, t: Double) {
-        // Select bodies that are active at the time.
-        val active = cluster.filter { it.initialTime <= t0 }
-
-        // If all bodies left at that time are already integrated, return.
-        if (active.all { it.backing.containsKey(t) })
+    private fun integrate(regs: List<Reg>, c0: Int, c: Int) {
+        // Do not integrate if the steps are the same.
+        if (c0 == c)
             return
 
-        // Set the simulated time for the active bodies.
-        for (b in active)
-            b.simulatedTime = t0
-
-        // Current input and output vectors.
+        // Current input and output arrays.
         lateinit var currentY: DoubleArray
         lateinit var currentYDot: DoubleArray
         lateinit var currentYDDot: DoubleArray
 
-        // List of receivers.
-        val receivers = List<Receiver>(active.size) {
+        // List of receivers for directing the effects.
+        val receivers = List<Receiver>(regs.size) {
             object : Receiver {
                 override val bounds: Double
-                    get() = active[it].bounds
+                    get() = regs[it].bounds
                 override val hull: List<Vec>
-                    get() = active[it].hull
+                    get() = regs[it].hull
 
                 override val pos: Vec
                     get() = currentY.pos(it)
@@ -165,9 +246,9 @@ class Simulator(
             }
         }
 
-        // Create equation mapper.
+        // Equation mapper describing the changes based on effects.
         val equations = FirstOrderConverter(object : SecondOrderDifferentialEquations {
-            override fun getDimension() = active.size * components
+            override fun getDimension() = regs.size * components
 
             override fun computeSecondDerivatives(t: Double, y: DoubleArray, yDot: DoubleArray, yDDot: DoubleArray) {
                 // Transfer current source and target arrays.
@@ -179,7 +260,7 @@ class Simulator(
                 yDDot.fill(0.0)
 
                 // Run local simulation for all bodies.
-                active.forEachIndexed { i, s ->
+                regs.forEachIndexed { i, s ->
                     s.definition.local(receivers[i], t)
                 }
 
@@ -190,267 +271,69 @@ class Simulator(
             }
         })
 
+        // Compute the valuations ahead to prevent lots of range checks.
+        val valuations = regs.map { it[c0] }
+
         // Create initial array from all bodies in the cluster.
-        val y0 = DoubleArray(active.size * components * 2) {
-            if (it < active.size * components)
+        val y0 = DoubleArray(regs.size * components * 2) {
+            if (it < regs.size * components)
                 when (it.rem(components)) {
-                    0 -> active[it / components].simulatedStatus.pos.x
-                    1 -> active[it / components].simulatedStatus.pos.y
-                    2 -> active[it / components].simulatedStatus.rot
-                    3 -> active[it / components].simulatedStatus.com.x
-                    4 -> active[it / components].simulatedStatus.com.y
-                    else -> active[it / components].simulatedStatus.mass
+                    0 -> valuations[it / components].pos.x
+                    1 -> valuations[it / components].pos.y
+                    2 -> valuations[it / components].rot
+                    3 -> valuations[it / components].com.x
+                    4 -> valuations[it / components].com.y
+                    else -> valuations[it / components].mass
                 }
             else
                 when (it.rem(components)) {
-                    0 -> active[it / components - active.size].simulatedStatus.posDot.x
-                    1 -> active[it / components - active.size].simulatedStatus.posDot.y
-                    2 -> active[it / components - active.size].simulatedStatus.rotDot
-                    3 -> active[it / components - active.size].simulatedStatus.comDot.x
-                    4 -> active[it / components - active.size].simulatedStatus.comDot.y
-                    else -> active[it / components - active.size].simulatedStatus.massDot
+                    0 -> valuations[it / components - regs.size].posDot.x
+                    1 -> valuations[it / components - regs.size].posDot.y
+                    2 -> valuations[it / components - regs.size].rotDot
+                    3 -> valuations[it / components - regs.size].comDot.x
+                    4 -> valuations[it / components - regs.size].comDot.y
+                    else -> valuations[it / components - regs.size].massDot
                 }
         }
 
         // Create an output array of appropriate size.
-        val y = DoubleArray(active.size * components * 2)
+        val y = DoubleArray(regs.size * components * 2)
 
         // Integrate equations from initial values to y.
-        integrator.integrate(equations, t0, y0, t, y)
+        integrator.integrate(equations, c0.toTime(), y0, c.toTime(), y)
 
-        // Transfer new status objects to the backings of the bodies.
-        active.forEachIndexed { i, s ->
-            s.backing[t] = Status(
+        // Transfer new status objects to the valuations of the registrations.
+        regs.forEachIndexed { i, r ->
+            r.valuations[c] = Status(
                     Vec(y[i * components + 0], y[i * components + 1]),
                     y[i * components + 2],
                     Vec(y[i * components + 3], y[i * components + 4]),
                     y[i * components + 5],
 
-                    Vec(y[(active.size + i) * components + 0], y[(active.size + i) * components + 1]),
-                    y[(active.size + i) * components + 2],
-                    Vec(y[(active.size + i) * components + 3], y[(active.size + i) * components + 4]),
-                    y[(active.size + i) * components + 5])
+                    Vec(y[(regs.size + i) * components + 0], y[(regs.size + i) * components + 1]),
+                    y[(regs.size + i) * components + 2],
+                    Vec(y[(regs.size + i) * components + 3], y[(regs.size + i) * components + 4]),
+                    y[(regs.size + i) * components + 5])
         }
     }
 
     /**
-     * Simulation registry, creates a clusterable status holding object that performs registration and invalidation
-     * methods.
+     * Registrations in this simulator.
      */
-    private inner class SimulatorRegistration(
-            val definition: Definition) : Registration, Clusterable {
-        /**
-         * Initialization time.
-         */
-        val initialTime =
-                definition.time
-
-        /**
-         * Initialization values.
-         */
-        val initialStatus =
-                Status(definition.pos,
-                        definition.rot,
-                        definition.com,
-                        definition.mass,
-                        definition.posDot,
-                        definition.rotDot,
-                        definition.comDot,
-                        definition.massDot)
-
-
-        private var simulatedTimeBacking = initialTime
-
-        /**
-         * Currently simulated time.
-         */
-        var simulatedTime: Double
-            get() = simulatedTimeBacking
-            set(value) {
-                // Only apply if value changed.
-                if (value != simulatedTimeBacking) {
-                    // Status is initial status if time is before initial time, otherwise the backing
-                    // stored value or initial value if no value present.
-                    simulatedStatus = if (value <= initialTime)
-                        initialStatus
-                    else
-                        backing[value] ?: initialStatus
-
-                    // Transfer to backing field.
-                    simulatedTimeBacking = value
-                }
-            }
-
-        /**
-         * Currently simulated status.
-         */
-        var simulatedStatus: Status = initialStatus
-            private set
-
-        override fun getPoint() =
-                simulatedStatus.pos.let {
-                    doubleArrayOf(it.x, it.y)
-                }
-
-        /**
-         * Values of integration at time t.
-         */
-        val backing = TreeMap<Double, Status>()
-
-        fun getStatus(t: Double) =
-                if (t <= initialTime)
-                    initialStatus
-                else
-                    backing[t] ?: initialStatus
-
-        override val bounds: Double
-            get() = definition.bounds
-
-        override val hull: List<Vec>
-            get() = definition.hull
-
-        override val pos: Vec
-            get() = evaluate(definition.time, Status::pos, Vec::lerp)
-
-        override val rot: Double
-            get() = evaluate(definition.time, Status::rot, ::lerp)
-
-        override val com: Vec
-            get() = evaluate(definition.time, Status::com, Vec::lerp)
-
-        override val mass: Double
-            get() = evaluate(definition.time, Status::mass, ::lerp)
-
-        override val posDot: Vec
-            get() = evaluate(definition.time, Status::posDot, Vec::lerp)
-
-        override val rotDot: Double
-            get() = evaluate(definition.time, Status::rotDot, ::lerp)
-
-        override val comDot: Vec
-            get() = evaluate(definition.time, Status::comDot, Vec::lerp)
-
-        override val massDot: Double
-            get() = evaluate(definition.time, Status::massDot, ::lerp)
-
-        override fun notifyChange(t: Double?) {
-            reset(t ?: definition.time)
-        }
-
-        override fun unregister(t: Double?) {
-            bodies -= this
-            reset(t ?: definition.time)
-        }
-
-        /**
-         * Evaluates the values at [t] over [resolution] by getting from status with [get] and interpolating the
-         * values with [lerp].
-         */
-        inline fun <E> evaluate(t: Double, get: (Status) -> E, lerp: (E, E, Double) -> E): E {
-            // Return initial value if before initial time.
-            if (t <= initialTime)
-                return get(initialStatus)
-
-            // Get slot of lower and higher keys.
-            val fe = floor(t / resolution) * resolution
-            val ce = ceil(t / resolution) * resolution
-
-            // Check if on slot boundary.
-            if (fe == ce) {
-                // Integrate the slot boundary.
-                integrateT(fe)
-
-                // Return the item directly.
-                return get(getStatus(fe))
-            }
-
-            // Integrate both ends.
-            integrateT(fe)
-            integrateT(ce)
-
-            // Interpolate between both ends.
-            return lerp(
-                    get(getStatus(fe)),
-                    get(getStatus(ce)),
-                    (t - fe) / (ce - fe))
-        }
-    }
+    private val regs = mutableListOf<Reg>()
 
     /**
-     * Adds a registration based on the definition.
+     * Registers a definition and returns the registration handle.
      */
-    fun register(definition: Definition): Registration =
-            SimulatorRegistration(definition).also {
-                // Reset all other bodies.
-                reset(it.initialTime)
-                consolidateUntil(it.initialTime)
+    fun register(definition: Definition): Registration {
+        // Create registration with the definition.
+        val reg = Reg(definition)
 
-                // Add the new registration.
-                bodies += it
-            }
+        // Reset all other bodies, as those might experience effects by the new registration.
+        reset(reg.cellOrigin)
 
-    /**
-     * Resets all computation from and including the time [from].
-     */
-    fun reset(from: Double) {
-        for (b in bodies)
-            b.backing.tailMap(from, true).clear()
-    }
-
-    /**
-     * Drops all computations to but not including the time [to].
-     */
-    fun drop(to: Double) {
-        // Clear old values.
-        for (b in bodies)
-            b.backing.headMap(to, false).clear()
+        // Add and return the registration.
+        regs += reg
+        return reg
     }
 }
-
-
-fun main(args: Array<String>) {
-
-    val sim = Simulator(object : Universal {
-        override fun universal(on: Receiver, other: List<Body>, t: Double) {
-            for (o in other)
-                if ((o.pos - on.pos).squaredLength > 50.0)
-                    on.accPos(Gravity.acc(o.pos, o.mass, on.pos))
-        }
-    })
-
-    var time = 0.0
-
-    val star = sim.register(object : Definition(
-            bounds = 20.0,
-            mass = 1e13) {
-        override val time: Double
-            get() = time
-    })
-
-    val ship = sim.register(object : Definition(
-            bounds = 3.0,
-            pos = Vec.right * 400,
-            posDot = Vec.up * 100) {
-        override val time: Double
-            get() = time
-    })
-
-    val ship2 = sim.register(object : Definition(
-            bounds = 3.0,
-            pos = Vec.up * 400,
-            posDot = Vec.left * 100
-    ) {
-        override val time: Double
-            get() = time
-    })
-
-    plot {
-        range(0.0, 12.0)
-        addMulti(listOf("x1", "y1", "x2", "y2", "x3", "y3")) {
-            time = it
-            doubleArrayOf(star.pos.x, star.pos.y, ship.pos.x, ship.pos.y, ship2.pos.x, ship2.pos.y)
-        }
-    }
-
-}
-
