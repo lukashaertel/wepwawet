@@ -10,7 +10,6 @@ import org.apache.commons.math3.ode.SecondOrderDifferentialEquations
 import org.apache.commons.math3.ode.nonstiff.DormandPrince853Integrator
 import org.apache.commons.math3.util.FastMath.*
 import java.util.*
-import kotlin.reflect.KProperty1
 
 class Simulator(
         val universal: Universal,
@@ -84,7 +83,7 @@ class Simulator(
         /**
          * Evaluates the [property] at the time [t] interpolating (if needed) with [interpolate].
          */
-        private inline fun <E> eval(property: KProperty1<Status, E>, t: Double, interpolate: (E, E, Double) -> E): E {
+        private inline fun <E> eval(property: (Status) -> E, t: Double, interpolate: (E, E, Double) -> E): E {
             // Get cells for evaluated time.
             val c1 = t.toCell()
             val c2 = t.toNextCell()
@@ -95,7 +94,7 @@ class Simulator(
                 assertIntegrated(c1)
 
                 // Get value of the property.
-                return property.get(get(c1))
+                return property(get(c1))
             } else {
                 // Cell is between location, assert that left and right locations are integrated.
                 assertIntegrated(c1)
@@ -105,8 +104,8 @@ class Simulator(
 
                 // Interpolated value of left and right property.
                 return interpolate(
-                        property.get(get(c1)),
-                        property.get(get(c2)), x)
+                        property(get(c1)),
+                        property(get(c2)), x)
             }
         }
 
@@ -125,6 +124,10 @@ class Simulator(
 
         override fun toString() =
                 definition.toString()
+
+        override val track: SortedMap<Double, Status>
+            get() = valuations.mapKeysTo(TreeMap<Double, Status>()) { it.key.toTime() }
+
     }
 
     /**

@@ -1,5 +1,6 @@
 package eu.metatools.kepler.tools
 
+import eu.metatools.kepler.math.lerp
 import java.util.*
 
 
@@ -43,3 +44,15 @@ fun <E> List<E>.skipItem(n: Int) = object : AbstractList<E>() {
                 this@skipItem.size
 
 }
+
+const val defaultSampleNumberPerUnit = 32
+
+/**
+ * Samples with [defaultSampleNumberPerUnit] points per one unit.
+ */
+fun ClosedFloatingPointRange<Double>.sample() = sample(((endInclusive - start) * defaultSampleNumberPerUnit).toInt())
+
+/**
+ * Samples with n points over all the range.
+ */
+fun ClosedFloatingPointRange<Double>.sample(n: Int) = (0..n).map { lerp(start, endInclusive, it / n.toDouble()) }

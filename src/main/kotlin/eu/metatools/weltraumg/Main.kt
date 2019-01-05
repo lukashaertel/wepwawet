@@ -12,6 +12,7 @@ import eu.metatools.kepler.Local
 import eu.metatools.kepler.math.DiscreteCoupling
 import eu.metatools.kepler.simulator.*
 import eu.metatools.kepler.tools.Vec
+import eu.metatools.kepler.tools.sample
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -29,6 +30,7 @@ import org.apache.commons.math3.util.FastMath.sqrt
 import org.jgroups.Global
 import org.jgroups.Message
 import java.io.*
+import java.util.*
 import kotlin.properties.Delegates.notNull
 
 
@@ -74,6 +76,39 @@ fun Receiver.local(force: Vec, pos: Vec) {
     accRot(Local.accRot(mass, rot, force, pos - com))
 }
 
+fun Any.toColor(): Color {
+    val x = (hashCode().toDouble() + Int.MAX_VALUE.toDouble()) + 1.0 * 180.0
+    return Color().fromHsv(x.toFloat(), 1.0f, 1.0f)
+}
+
+fun ShapeRenderer.hull(list: List<Vec>, origin: Vec, rotation: Double) {
+    val data = list
+            .map { origin + it.rotate(rotation) }
+            .flatten()
+            .map { it.toFloat() }
+            .toFloatArray()
+    polyline(data)
+    line(data[data.size - 2], data[data.size - 1], data[0], data[1])
+}
+
+fun ShapeRenderer.track(list: List<Vec>) {
+    val data = list
+            .flatten()
+            .map { it.toFloat() }
+            .toFloatArray()
+    polyline(data)
+}
+
+const val planetDimensions = 70.0
+const val planetRoughness = 2.0
+
+fun planet(seed: Long): List<Vec> {
+    val r = Random(seed)
+    return (0.0..2.0 * Math.PI).sample().map {
+        Vec.right.rotate(it) * (planetDimensions + r.nextDouble() * planetRoughness)
+    }
+}
+
 /**
  * Root object of the game.
  */
@@ -84,18 +119,19 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
                 if ((o.pos - on.pos).squaredLength > 5.0 * 5.0)
                     on.gravity(o)
         }
-    })
+    }, resolution = 1 / 16.0)
 
     val reg: Registration = simulator.register(object : Definition(
-            bounds = 20.0,
+            hull = planet(0L),
             pos = Vec(300, 300),
-            mass = 1e15) {
+            mass = 1e15,
+            rotDot = 0.1) {
         override val time: Double
             get() = container.seconds()
     })
 
     override fun invalidate(currentTime: Double) {
-        simulator.release(currentTime - 10.0)
+        simulator.release(currentTime - 20.0)
     }
 
     val spawn by impulse { owner: Author ->
@@ -107,13 +143,16 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
         shapeRenderer.begin()
         shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
         shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
+
+
+        // Render "planet" circle.
         shapeRenderer.color = Color.WHITE
+        shapeRenderer.hull(reg.hull, reg.pos, reg.rot)
 
-        val x = reg.pos.x.toFloat()
-        val y = reg.pos.y.toFloat()
-
-        // Render ship triangle
-        shapeRenderer.circle(x, y, reg.bounds.toFloat())
+        // Render track.
+        shapeRenderer.color = Author.MIN_VALUE.toColor()
+        shapeRenderer.track(
+                reg.track.values.map { it.pos })
 
         shapeRenderer.end()
         batch.begin()
@@ -123,6 +162,7 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
 
 
 const val shipFactor = 1e14
+const val shipDimensions = 5.0
 
 // TODO: Nachladen über serilalisierung
 
@@ -134,7 +174,11 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
     val all get() = container.findAuto<Root>()
 
     val reg: Registration = all!!.simulator.register(object : Definition(
-            bounds = 5.0,
+            hull = listOf(
+                    (Vec.left + Vec.up).times(shipDimensions / sqrt(2.0)),
+                    (Vec.right).times(shipDimensions),
+                    (Vec.left + Vec.down).times(shipDimensions / sqrt(2.0))
+            ),
             mass = 1.0 * shipFactor,
             pos = Vec(50, 50),
             posDot = Vec.right * 10
@@ -154,23 +198,15 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
         shapeRenderer.begin()
         shapeRenderer.transformMatrix = batch.transformMatrix.cpy()
         shapeRenderer.projectionMatrix = batch.projectionMatrix.cpy()
+
+        // Render ship hull.
         shapeRenderer.color = Color.WHITE
+        shapeRenderer.hull(reg.hull, reg.pos, reg.rot)
 
-        val x = reg.pos.x.toFloat()
-        val y = reg.pos.y.toFloat()
-        val rot = reg.rot
-
-        // Render ship triangle
-        val p1 = (Vec.left + Vec.up).times(reg.bounds / sqrt(2.0)).rotate(rot)
-        val p2 = (Vec.right).times(reg.bounds).rotate(rot)
-        val p3 = (Vec.left + Vec.down).times(reg.bounds / sqrt(2.0)).rotate(rot)
-        shapeRenderer.triangle(
-                x + p1.x.toFloat(),
-                y + p1.y.toFloat(),
-                x + p2.x.toFloat(),
-                y + p2.y.toFloat(),
-                x + p3.x.toFloat(),
-                y + p3.y.toFloat())
+        // Render track.
+        shapeRenderer.color = Author.MIN_VALUE.toColor()
+        shapeRenderer.track(
+                reg.track.values.map { it.pos })
 
         shapeRenderer.end()
         batch.begin()
