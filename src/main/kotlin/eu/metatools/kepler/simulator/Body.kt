@@ -11,7 +11,7 @@ interface Body {
     /**
      * Hull of the body.
      */
-    val hull: List<Vec>
+    val hull: Hull
 
     /**
      * Position of the body.

@@ -12,7 +12,7 @@ import eu.metatools.kepler.Local
 import eu.metatools.kepler.math.DiscreteCoupling
 import eu.metatools.kepler.simulator.*
 import eu.metatools.kepler.tools.Vec
-import eu.metatools.kepler.tools.sample
+import eu.metatools.kepler.tools.sampleDouble
 import eu.metatools.net.ImplicitBinding
 import eu.metatools.net.jgroups.BindingChannel
 import eu.metatools.net.jgroups.BindingCoder
@@ -26,7 +26,6 @@ import ktx.actors.onClick
 import ktx.actors.plus
 import ktx.scene2d.button
 import ktx.scene2d.label
-import org.apache.commons.math3.util.FastMath.sqrt
 import org.jgroups.Global
 import org.jgroups.Message
 import java.io.*
@@ -81,14 +80,17 @@ fun Any.toColor(): Color {
     return Color().fromHsv(x.toFloat(), 1.0f, 1.0f)
 }
 
-fun ShapeRenderer.hull(list: List<Vec>, origin: Vec, rotation: Double) {
-    val data = list
-            .map { origin + it.rotate(rotation) }
-            .flatten()
-            .map { it.toFloat() }
-            .toFloatArray()
-    polyline(data)
-    line(data[data.size - 2], data[data.size - 1], data[0], data[1])
+fun ShapeRenderer.hull(hull: Hull, origin: Vec, rotation: Double) {
+    for (list in hull.parts) {
+        val data = list
+                .points
+                .map { origin + it.rotate(rotation) }
+                .flatten()
+                .map { it.toFloat() }
+                .toFloatArray()
+        polyline(data)
+        line(data[data.size - 2], data[data.size - 1], data[0], data[1])
+    }
 }
 
 fun ShapeRenderer.track(list: List<Vec>) {
@@ -99,14 +101,14 @@ fun ShapeRenderer.track(list: List<Vec>) {
     polyline(data)
 }
 
-const val planetDimensions = 70.0
-const val planetRoughness = 2.0
+const val planetDimensions = 180.0
+const val planetRoughness = 1.0
 
-fun planet(seed: Long): List<Vec> {
+fun planet(seed: Long): Hull {
     val r = Random(seed)
-    return (0.0..2.0 * Math.PI).sample().map {
+    return Hull(listOf(Convex((0.0..2.0 * Math.PI).sampleDouble().map {
         Vec.right.rotate(it) * (planetDimensions + r.nextDouble() * planetRoughness)
-    }
+    })))
 }
 
 /**
@@ -115,9 +117,10 @@ fun planet(seed: Long): List<Vec> {
 class Root(container: Container) : Entity(container), Drawable, TimeInvalidated {
     val simulator = Simulator(object : Universal {
         override fun universal(on: Receiver, other: List<Body>, t: Double) {
-            for (o in other)
+            for (o in other) {
                 if ((o.pos - on.pos).squaredLength > 5.0 * 5.0)
                     on.gravity(o)
+            }
         }
     }, resolution = 1 / 16.0)
 
@@ -128,6 +131,8 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
             rotDot = 0.1) {
         override val time: Double
             get() = container.seconds()
+
+        override fun toString() = "Planet"
     })
 
     override fun invalidate(currentTime: Double) {
@@ -161,8 +166,8 @@ class Root(container: Container) : Entity(container), Drawable, TimeInvalidated 
 }
 
 
-const val shipFactor = 1e14
-const val shipDimensions = 5.0
+const val shipFactor = 1e0
+const val shipDimensions = 70.0
 
 // TODO: Nachladen über serilalisierung
 
@@ -174,11 +179,7 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
     val all get() = container.findAuto<Root>()
 
     val reg: Registration = all!!.simulator.register(object : Definition(
-            hull = listOf(
-                    (Vec.left + Vec.up).times(shipDimensions / sqrt(2.0)),
-                    (Vec.right).times(shipDimensions),
-                    (Vec.left + Vec.down).times(shipDimensions / sqrt(2.0))
-            ),
+            hull = Hull(listOf(Convex.rect(shipDimensions, shipDimensions / 3.0))),
             mass = 1.0 * shipFactor,
             pos = Vec(50, 50),
             posDot = Vec.right * 10
@@ -191,6 +192,8 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
             on.local(Vec.down * lateral[t] * shipFactor, Vec.left)
             on.local(Vec.up * lateral[t] * shipFactor, Vec.right)
         }
+
+        override fun toString() = "Ship of $owner"
     })
 
     override fun draw(batch: Batch, parentAlpha: Float) {
@@ -207,6 +210,26 @@ class Player(container: Container, owner: Author) : Entity(container), Drawable 
         shapeRenderer.color = Author.MIN_VALUE.toColor()
         shapeRenderer.track(
                 reg.track.values.map { it.pos })
+
+        all?.let {
+            val x = gjk(it.reg.pos, it.reg.rot, it.reg.hull.parts.first(),
+                    reg.pos, reg.rot, reg.hull.parts.first())
+
+            if (x != null) {
+                shapeRenderer.color = Color.YELLOW
+                shapeRenderer.circle(x.centerA.x.toFloat(), x.centerA.y.toFloat(), 6.0f)
+
+                shapeRenderer.color = Color.RED
+                shapeRenderer.circle(x.centerB.x.toFloat(), x.centerB.y.toFloat(), 6.0f)
+
+//
+//                if (x.contact.size == 1)
+//                    shapeRenderer.circle(x.contact.first().x.toFloat(), x.contact.first().y.toFloat(), 4.0f)
+//                else if (x.contact.size > 1)
+//                    shapeRenderer.track(x.contact)
+            }
+        }
+
 
         shapeRenderer.end()
         batch.begin()

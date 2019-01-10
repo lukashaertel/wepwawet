@@ -16,9 +16,19 @@ data class Vec(val x: Double, val y: Double) : Iterable<Double>, Lerp<Vec> {
 
     companion object {
         /**
+         * NaN-vector.
+         */
+        val NaN = Vec(Double.NaN, Double.NaN)
+
+        /**
          * Zero-vector.
          */
         val zero = Vec(0.0, 0.0)
+
+        /**
+         * One-vector.
+         */
+        val one = Vec(1.0, 1.0)
 
         /**
          * Left-vector, [x] is negative one.
@@ -218,3 +228,19 @@ val Vec.yx get() = Vec(y, x)
  * Vector component subscript.
  */
 val Vec.yy get() = Vec(y, y)
+
+/**
+ * Triple product of vectors [a], [b] and [c].
+ */
+fun tripleProduct(a: Vec, b: Vec, c: Vec) =
+        Vec(-(a.x * b.y - a.y * b.x) * c.y, (a.x * b.y - a.y * b.x) * c.x)
+
+/**
+ * Converts a double array to a vector.
+ */
+fun DoubleArray.toVec() = Vec(get(0), get(1))
+
+/**
+ * Converts a double array to a vector.
+ */
+fun DoubleArray.toVec(offset: Int) = Vec(get(offset), get(offset + 1))

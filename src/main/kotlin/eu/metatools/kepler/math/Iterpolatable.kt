@@ -20,10 +20,20 @@ fun <T> Lerp<T>.lerp(selfX: Double, toX: Double, to: T, x: Double): T =
         else
             lerp(to, (x - selfX) / (toX - selfX))
 
+fun lerp(a: Float, to: Float, x: Double) =
+        (a * (1.0 - x) + to * x).toFloat()
+
 
 fun lerp(a: Double, to: Double, x: Double) =
         a * (1.0 - x) + to * x
 
+/**
+ * Converts the [Double] to and [Lerp] of [Double].
+ */
+fun Float.asLerp() = object : Lerp<Float> {
+    override fun lerp(to: Float, x: Double) =
+            lerp(this@asLerp, to, x)
+}
 /**
  * Converts the [Double] to and [Lerp] of [Double].
  */

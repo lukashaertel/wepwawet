@@ -1,6 +1,7 @@
 package eu.metatools.kepler.simulator
 
 import eu.metatools.kepler.math.lerp
+import eu.metatools.kepler.math.shearCylinderIntersection
 import eu.metatools.kepler.tools.Vec
 import eu.metatools.kepler.tools.cluster
 import eu.metatools.kepler.tools.skipItem
@@ -210,7 +211,7 @@ class Simulator(
             object : Receiver {
                 override val bounds: Double
                     get() = regs[it].bounds
-                override val hull: List<Vec>
+                override val hull: Hull
                     get() = regs[it].hull
 
                 override val pos: Vec
@@ -318,6 +319,23 @@ class Simulator(
                     Vec(y[(regs.size + i) * components + 3], y[(regs.size + i) * components + 4]),
                     y[(regs.size + i) * components + 5])
         }
+
+//        val t = (c - c0).toTime()
+//        for ((i, r1) in regs.withIndex()) {
+//            val r1v = valuations[i]
+//            for ((j, r2) in regs.withIndex()) {
+//                if (i >= j) continue
+//
+//                val r2v = r2[c0]
+//
+//                val range = shearCylinderIntersection(
+//                        r1v.pos, r1v.posDot, r1.bounds,
+//                        r2v.pos, r2v.posDot, r2.bounds)
+//
+//                if (t in range)
+//                    println("$r1 and $r2 intersection probable at ${c.toTime()}")
+//            }
+//        }
     }
 
     /**
